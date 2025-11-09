@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AI Learning Map",
-  description: "Generate interactive learning maps for any topic",
+  title: "Cerebra",
+  description: "AI-Powered Interactive Learning Map",
 };
 
 export default function RootLayout({
