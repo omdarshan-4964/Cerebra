@@ -5,9 +5,7 @@ export function useToast() {
     try {
       window.dispatchEvent(new CustomEvent('cerebra-toast', { detail: { message, level } }));
     } catch (e) {
-      // fallback
-      // eslint-disable-next-line no-console
-      console.log(level.toUpperCase(), message);
+      // silent fallback
     }
   };
 

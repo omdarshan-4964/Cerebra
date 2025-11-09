@@ -1,6 +1,4 @@
 import { LearningMapData } from './types';
-
-// A few curated templates to return immediately for common topics
 export const ROADMAP_TEMPLATES: LearningMapData[] = [
   {
     topic: 'Web Development',

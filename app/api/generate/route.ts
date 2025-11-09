@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+export const runtime = 'nodejs';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { detectRoadmap } from '../../../lib/roadmap-detector';
 import ROADMAP_TEMPLATES from '../../../lib/roadmap-templates';
@@ -10,14 +11,10 @@ export async function POST(request: Request) {
       difficulty?: string;
     };
 
-    // First, try to detect a curated template
     const detected = detectRoadmap(topic || '');
     if (detected) {
-      // Attach metadata if using curated template
       return NextResponse.json({ ...detected, templateSource: 'curated' });
     }
-
-    // Fallback to generative API
     if (!process.env.GEMINI_API_KEY) {
       console.error('GEMINI_API_KEY is not set!');
       return NextResponse.json(
@@ -35,18 +32,15 @@ export async function POST(request: Request) {
     const response = await result.response;
     const text = response.text();
 
-    // Try to extract JSON from possibly noisy text
     let cleanedText = text.trim();
     cleanedText = cleanedText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
     const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error('No JSON found in response');
       throw new Error('Invalid response format - no JSON found');
     }
 
     const learningMap = JSON.parse(jsonMatch[0]);
 
-    // Basic validation
     if (!learningMap.nodes || !Array.isArray(learningMap.nodes)) {
       throw new Error('Invalid response: missing nodes array');
     }
