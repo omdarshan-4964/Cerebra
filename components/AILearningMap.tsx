@@ -1,19 +1,36 @@
 'use client';
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import ReactFlow, {
   Node,
   Edge,
   Controls,
   Background,
+  MiniMap,
   useNodesState,
   useEdgesState,
   BackgroundVariant,
   MarkerType,
   Position,
+  NodeProps,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { Sparkles, Download, Filter, Loader2, BookOpen, Code, Database, Palette } from 'lucide-react';
+import {
+  Sparkles,
+  Download,
+  Filter,
+  Loader2,
+  BookOpen,
+  Code,
+  Database,
+  Palette,
+  Server,
+  Wrench,
+  Video,
+  FileText,
+  Book,
+  Play,
+} from 'lucide-react';
 
 // ============================================
 // TYPES
@@ -41,75 +58,211 @@ interface LearningMapData {
 }
 
 // ============================================
-// CUSTOM NODE COMPONENT
+// CUSTOM NODE COMPONENT - Premium Design
 // ============================================
-const CustomNode = ({ data }: any) => {
-  const getIcon = (category: string) => {
-    const icons: Record<string, any> = {
+const CustomNode = React.memo(({ data, selected }: NodeProps) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const getIcon = useCallback((category: string) => {
+    const icons: Record<string, React.ComponentType<any>> = {
       frontend: Palette,
       backend: Database,
+      database: Database,
       general: Code,
       fundamentals: BookOpen,
+      tools: Wrench,
+      server: Server,
     };
     const Icon = icons[category.toLowerCase()] || Code;
     return <Icon className="w-5 h-5" />;
-  };
+  }, []);
 
-  const getLevelColor = (level: string) => {
-    const colors: Record<string, string> = {
-      beginner: 'bg-green-500',
-      intermediate: 'bg-yellow-500',
-      advanced: 'bg-red-500',
+  const getCategoryColors = useCallback((category: string) => {
+    const colors: Record<string, { bg: string; icon: string; border: string }> = {
+      frontend: {
+        bg: 'bg-gradient-to-br from-purple-500/20 to-pink-500/20',
+        icon: 'text-purple-600',
+        border: 'border-purple-300/50',
+      },
+      backend: {
+        bg: 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20',
+        icon: 'text-blue-600',
+        border: 'border-blue-300/50',
+      },
+      database: {
+        bg: 'bg-gradient-to-br from-green-500/20 to-emerald-500/20',
+        icon: 'text-green-600',
+        border: 'border-green-300/50',
+      },
+      general: {
+        bg: 'bg-gradient-to-br from-indigo-500/20 to-purple-500/20',
+        icon: 'text-indigo-600',
+        border: 'border-indigo-300/50',
+      },
+      fundamentals: {
+        bg: 'bg-gradient-to-br from-orange-500/20 to-red-500/20',
+        icon: 'text-orange-600',
+        border: 'border-orange-300/50',
+      },
+      tools: {
+        bg: 'bg-gradient-to-br from-teal-500/20 to-cyan-500/20',
+        icon: 'text-teal-600',
+        border: 'border-teal-300/50',
+      },
     };
-    return colors[level] || 'bg-gray-500';
-  };
+    return colors[category.toLowerCase()] || colors.general;
+  }, []);
+
+  const getLevelConfig = useCallback((level: string) => {
+    const configs: Record<string, { color: string; label: string; gradient: string }> = {
+      beginner: {
+        color: 'bg-green-500',
+        label: 'Beginner',
+        gradient: 'from-green-400 to-emerald-500',
+      },
+      intermediate: {
+        color: 'bg-yellow-500',
+        label: 'Intermediate',
+        gradient: 'from-yellow-400 to-orange-500',
+      },
+      advanced: {
+        color: 'bg-red-500',
+        label: 'Advanced',
+        gradient: 'from-red-400 to-pink-500',
+      },
+    };
+    return configs[level] || configs.beginner;
+  }, []);
+
+  const getResourceIcon = useCallback((type: string) => {
+    const icons: Record<string, React.ComponentType<any>> = {
+      video: Video,
+      article: FileText,
+      book: Book,
+    };
+    const Icon = icons[type] || FileText;
+    return <Icon className="w-3.5 h-3.5" />;
+  }, []);
+
+  const categoryColors = getCategoryColors(data.category);
+  const levelConfig = getLevelConfig(data.level);
 
   return (
-    <div className="px-6 py-4 shadow-lg rounded-lg bg-white border-2 border-gray-200 hover:border-blue-500 transition-all duration-200 min-w-[200px] group">
-      <div className="flex items-start gap-3">
-        <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
-          {getIcon(data.category)}
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            <h3 className="font-bold text-sm text-gray-800">{data.title}</h3>
-            <span className={`w-2 h-2 rounded-full ${getLevelColor(data.level)}`} />
+    <div
+      className={`relative min-w-[280px] transition-all duration-300 ${
+        selected ? 'scale-105' : ''
+      }`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Glassmorphism Card */}
+      <div
+        className={`relative rounded-2xl p-6 backdrop-blur-xl bg-white/80 border-2 transition-all duration-300 ${
+          isHovered || selected
+            ? 'shadow-2xl border-blue-400/60 scale-105'
+            : 'shadow-md border-gray-200/60'
+        } ${categoryColors.border}`}
+        style={{
+          background: `linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)`,
+        }}
+      >
+        {/* Gradient Background Overlay */}
+        <div
+          className={`absolute inset-0 rounded-2xl opacity-10 transition-opacity duration-300 ${
+            isHovered ? 'opacity-20' : ''
+          } bg-gradient-to-br ${categoryColors.bg.replace('/20', '')}`}
+        />
+
+        {/* Content */}
+        <div className="relative z-10">
+          {/* Header with Icon and Badge */}
+          <div className="flex items-start justify-between mb-3">
+            <div className={`p-2.5 rounded-xl ${categoryColors.bg} ${categoryColors.icon} shadow-sm`}>
+              {getIcon(data.category)}
+            </div>
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-bold text-white shadow-sm bg-gradient-to-r ${levelConfig.gradient}`}
+            >
+              {levelConfig.label}
+            </span>
           </div>
-          <p className="text-xs text-gray-600">{data.description}</p>
+
+          {/* Title */}
+          <h3 className="font-bold text-base text-gray-900 mb-2 leading-tight">{data.title}</h3>
+
+          {/* Description */}
+          <p className="text-sm text-gray-600 mb-4 leading-relaxed">{data.description}</p>
+
+          {/* Resources - Expandable on Hover */}
           {data.resources && data.resources.length > 0 && (
-            <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <p className="text-xs font-semibold text-gray-700 mb-1">Resources:</p>
-              {data.resources.slice(0, 2).map((resource: Resource, idx: number) => (
-                <p key={idx} className="text-xs text-blue-600 truncate">• {resource.title}</p>
-              ))}
+            <div
+              className={`overflow-hidden transition-all duration-300 ${
+                isHovered ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+              }`}
+            >
+              <div className="pt-3 border-t border-gray-200/60">
+                <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                  Resources
+                </p>
+                <div className="space-y-2">
+                  {data.resources.map((resource: Resource, idx: number) => (
+                    <a
+                      key={idx}
+                      href={resource.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 p-2 rounded-lg bg-gray-50/80 hover:bg-blue-50/80 transition-all duration-200 group"
+                    >
+                      <div className="text-blue-600 group-hover:text-blue-700">
+                        {getResourceIcon(resource.type)}
+                      </div>
+                      <span className="text-xs text-gray-700 group-hover:text-blue-700 truncate flex-1">
+                        {resource.title}
+                      </span>
+                      <Play className="w-3 h-3 text-gray-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </a>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
+
+        {/* Glow Effect on Hover */}
+        {isHovered && (
+          <div
+            className={`absolute -inset-0.5 rounded-2xl bg-gradient-to-r ${levelConfig.gradient} opacity-20 blur-xl -z-10 transition-opacity duration-300`}
+          />
+        )}
       </div>
     </div>
   );
-};
+});
+
+CustomNode.displayName = 'CustomNode';
 
 // ============================================
-// NODE TYPES (Outside component - fixes React Flow warning)
+// NODE TYPES
 // ============================================
 const nodeTypes = {
   custom: CustomNode,
 };
 
 // ============================================
-// LAYOUT ALGORITHM
+// IMPROVED LAYOUT ALGORITHM
 // ============================================
 const getLayoutedElements = (nodes: LearningNode[], edges: { from: string; to: string }[]) => {
-  const nodeWidth = 250;
-  const nodeHeight = 120;
-  const horizontalSpacing = 300;
-  const verticalSpacing = 150;
+  const HORIZONTAL_SPACING = 350;
+  const VERTICAL_SPACING = 180;
+  const NODE_HEIGHT = 200;
 
+  // Build relationship maps
   const childrenMap = new Map<string, string[]>();
   const parentMap = new Map<string, string>();
-  
-  edges.forEach(edge => {
+  const nodeMap = new Map<string, LearningNode>();
+
+  nodes.forEach((node) => nodeMap.set(node.id, node));
+  edges.forEach((edge) => {
     if (!childrenMap.has(edge.from)) {
       childrenMap.set(edge.from, []);
     }
@@ -117,58 +270,148 @@ const getLayoutedElements = (nodes: LearningNode[], edges: { from: string; to: s
     parentMap.set(edge.to, edge.from);
   });
 
-  const rootNode = nodes.find(n => !parentMap.has(n.id));
-  
-  const positioned = new Map<string, { x: number; y: number }>();
-  const levelCounts = new Map<number, number>();
+  // Find root node
+  const rootNode = nodes.find((n) => !parentMap.has(n.id)) || nodes[0];
+  if (!rootNode) return { nodes: [], edges: [] };
 
-  const positionNode = (nodeId: string, level: number) => {
-    if (positioned.has(nodeId)) return;
-
-    const levelCount = levelCounts.get(level) || 0;
-    levelCounts.set(level, levelCount + 1);
-
-    const x = level * horizontalSpacing;
-    const y = levelCount * verticalSpacing;
-
-    positioned.set(nodeId, { x, y });
+  // Calculate subtree heights
+  const subtreeHeights = new Map<string, number>();
+  const calculateHeight = (nodeId: string): number => {
+    if (subtreeHeights.has(nodeId)) return subtreeHeights.get(nodeId)!;
 
     const children = childrenMap.get(nodeId) || [];
-    children.forEach(childId => {
-      positionNode(childId, level + 1);
-    });
+    if (children.length === 0) {
+      subtreeHeights.set(nodeId, NODE_HEIGHT);
+      return NODE_HEIGHT;
+    }
+
+    const childrenHeight = children.reduce((sum, childId) => sum + calculateHeight(childId), 0);
+    const spacing = (children.length - 1) * VERTICAL_SPACING;
+    const totalHeight = childrenHeight + spacing;
+    subtreeHeights.set(nodeId, Math.max(NODE_HEIGHT, totalHeight));
+    return subtreeHeights.get(nodeId)!;
   };
 
-  if (rootNode) {
-    positionNode(rootNode.id, 0);
-  }
+  calculateHeight(rootNode.id);
 
-  const flowNodes: Node[] = nodes.map(node => ({
+  // Position nodes
+  const positions = new Map<string, { x: number; y: number }>();
+
+  const positionNode = (nodeId: string, level: number, startY: number): number => {
+    const node = nodeMap.get(nodeId);
+    if (!node) return startY;
+
+    const children = childrenMap.get(nodeId) || [];
+    const subtreeHeight = subtreeHeights.get(nodeId) || NODE_HEIGHT;
+
+    // Center the node vertically within its subtree
+    let currentY = startY;
+    if (children.length > 0) {
+      const childrenHeight = children.reduce(
+        (sum, childId) => subtreeHeights.get(childId) || NODE_HEIGHT,
+        0
+      );
+      const spacing = (children.length - 1) * VERTICAL_SPACING;
+      const totalChildrenHeight = childrenHeight + spacing;
+      currentY = startY + (totalChildrenHeight - NODE_HEIGHT) / 2;
+    }
+
+    positions.set(nodeId, {
+      x: level * HORIZONTAL_SPACING,
+      y: currentY,
+    });
+
+    // Position children
+    let childStartY = startY;
+    for (const childId of children) {
+      const childHeight = subtreeHeights.get(childId) || NODE_HEIGHT;
+      childStartY = positionNode(childId, level + 1, childStartY);
+      childStartY += VERTICAL_SPACING;
+    }
+
+    return startY + subtreeHeight;
+  };
+
+  // Start positioning from root
+  positionNode(rootNode.id, 0, 0);
+
+  // Center root vertically
+  const rootY = positions.get(rootNode.id)?.y || 0;
+  const totalHeight = subtreeHeights.get(rootNode.id) || NODE_HEIGHT;
+  const centerOffset = (totalHeight - NODE_HEIGHT) / 2;
+
+  positions.forEach((pos, nodeId) => {
+    if (nodeId === rootNode.id) {
+      pos.y = -centerOffset;
+    } else {
+      pos.y -= rootY;
+    }
+  });
+
+  // Create React Flow nodes
+  const flowNodes: Node[] = nodes.map((node) => ({
     id: node.id,
     type: 'custom',
-    position: positioned.get(node.id) || { x: 0, y: 0 },
+    position: positions.get(node.id) || { x: 0, y: 0 },
     data: node,
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
   }));
 
-  const flowEdges: Edge[] = edges.map((edge, idx) => ({
-    id: `edge-${idx}`,
-    source: edge.from,
-    target: edge.to,
-    type: 'smoothstep',
-    animated: true,
-    markerEnd: {
-      type: MarkerType.ArrowClosed,
-      width: 20,
-      height: 20,
-      color: '#3b82f6',
-    },
-    style: { stroke: '#3b82f6', strokeWidth: 2 },
-  }));
+  // Create edges with gradients based on level
+  const getEdgeColor = (sourceLevel: string) => {
+    const colors: Record<string, string> = {
+      beginner: '#10b981',
+      intermediate: '#f59e0b',
+      advanced: '#ef4444',
+    };
+    return colors[sourceLevel] || '#3b82f6';
+  };
+
+  const flowEdges: Edge[] = edges.map((edge, idx) => {
+    const sourceNode = nodeMap.get(edge.from);
+    const edgeColor = getEdgeColor(sourceNode?.level || 'beginner');
+
+    return {
+      id: `edge-${idx}`,
+      source: edge.from,
+      target: edge.to,
+      type: 'smoothstep',
+      animated: true,
+      style: {
+        stroke: edgeColor,
+        strokeWidth: 3,
+        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+      },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        width: 24,
+        height: 24,
+        color: edgeColor,
+      },
+    };
+  });
 
   return { nodes: flowNodes, edges: flowEdges };
 };
+
+// ============================================
+// SKELETON LOADING COMPONENT
+// ============================================
+const SkeletonNode = ({ x, y }: { x: number; y: number }) => (
+  <div
+    className="absolute rounded-2xl bg-white/60 backdrop-blur-sm border-2 border-gray-200/60 shadow-md p-6 min-w-[280px] animate-pulse"
+    style={{ left: x, top: y }}
+  >
+    <div className="flex items-start justify-between mb-3">
+      <div className="w-10 h-10 bg-gray-200 rounded-xl" />
+      <div className="w-20 h-6 bg-gray-200 rounded-full" />
+    </div>
+    <div className="h-5 bg-gray-200 rounded mb-2 w-3/4" />
+    <div className="h-4 bg-gray-200 rounded mb-1 w-full" />
+    <div className="h-4 bg-gray-200 rounded w-5/6" />
+  </div>
+);
 
 // ============================================
 // MAIN COMPONENT
@@ -177,36 +420,46 @@ export default function AILearningMap() {
   const [topic, setTopic] = useState('');
   const [difficulty, setDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner');
   const [loading, setLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState('');
   const [showMap, setShowMap] = useState(false);
   const [mapData, setMapData] = useState<LearningMapData | null>(null);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [nodeEntered, setNodeEntered] = useState(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const reactFlowInstance = useRef<any>(null);
+
+  // Example topics
+  const exampleTopics = [
+    'Web Development',
+    'Machine Learning',
+    'Python Programming',
+    'React.js',
+    'Data Science',
+    'Cloud Computing',
+  ];
 
   // ============================================
-  // GENERATE MAP (Calls API)
+  // GENERATE MAP
   // ============================================
-  const handleGenerate = async () => {
+  const handleGenerate = useCallback(async () => {
     if (!topic.trim()) {
-      alert('Please enter a topic!');
       return;
     }
 
     setLoading(true);
-    
+    setLoadingStage('Analyzing topic...');
+
     try {
-      console.log('Calling API with:', { topic, difficulty });
-      
+      // Simulate progress stages
+      setTimeout(() => setLoadingStage('Building roadmap...'), 1000);
+      setTimeout(() => setLoadingStage('Generating resources...'), 2000);
+
       const response = await fetch('/api/generate', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json' 
-        },
-        body: JSON.stringify({ 
-          topic, 
-          difficulty 
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, difficulty }),
       });
 
       if (!response.ok) {
@@ -214,89 +467,128 @@ export default function AILearningMap() {
       }
 
       const data = await response.json();
-      console.log('Received data:', data);
-      
+
       if (!data.nodes || !data.edges) {
         throw new Error('Invalid data format received from API');
       }
-      
+
+      setLoadingStage('Finalizing...');
       setMapData(data);
-      
-      const { nodes: flowNodes, edges: flowEdges } = getLayoutedElements(
-        data.nodes, 
-        data.edges
-      );
+
+      const { nodes: flowNodes, edges: flowEdges } = getLayoutedElements(data.nodes, data.edges);
       setNodes(flowNodes);
       setEdges(flowEdges);
-      
+
       setShowMap(true);
-      
+      setNodeEntered(false);
+
+      // Trigger entrance animation
+      setTimeout(() => {
+        setNodeEntered(true);
+        if (reactFlowInstance.current) {
+          reactFlowInstance.current.fitView({ padding: 0.3, duration: 800 });
+        }
+      }, 100);
     } catch (error) {
       console.error('Error generating map:', error);
       alert(`Failed to generate learning map: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
+      setLoadingStage('');
     }
-  };
+  }, [topic, difficulty, setNodes, setEdges]);
 
   // ============================================
-  // FILTER NODES BY DIFFICULTY
+  // FILTER NODES
   // ============================================
   const filteredNodes = useMemo(() => {
     if (!activeFilter) return nodes;
-    return nodes.filter(node => node.data.level === activeFilter);
-  }, [nodes, activeFilter]);
+    const filtered = nodes.filter((node) => node.data.level === activeFilter);
+    // Also filter edges to only show connections between visible nodes
+    const visibleIds = new Set(filtered.map((n) => n.id));
+    return filtered.map((node) => ({
+      ...node,
+      // Add animation class
+      className: nodeEntered ? 'animate-fade-in' : '',
+    }));
+  }, [nodes, activeFilter, nodeEntered]);
+
+  const filteredEdges = useMemo(() => {
+    if (!activeFilter) return edges;
+    const visibleIds = new Set(filteredNodes.map((n) => n.id));
+    return edges.filter(
+      (edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target)
+    );
+  }, [edges, activeFilter, filteredNodes]);
 
   // ============================================
   // EXPORT TO JSON
   // ============================================
-  const handleExport = () => {
+  const handleExport = useCallback(() => {
     if (!mapData) return;
     const dataStr = JSON.stringify(mapData, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
     const exportFileDefaultName = `${mapData.topic.toLowerCase().replace(/\s+/g, '-')}-learning-map.json`;
-    
+
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
-  };
+  }, [mapData]);
 
   // ============================================
   // MAP VIEW
   // ============================================
   if (showMap) {
     return (
-      <div className="h-screen w-full bg-gradient-to-br from-gray-50 to-blue-50">
+      <div className="h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 relative overflow-hidden">
+        {/* Animated Background Pattern */}
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute inset-0" style={{
+            backgroundImage: `radial-gradient(circle at 2px 2px, rgb(99 102 241 / 0.15) 1px, transparent 0)`,
+            backgroundSize: '40px 40px',
+          }} />
+        </div>
+
         {/* Header */}
-        <div className="absolute top-0 left-0 right-0 z-10 bg-white/80 backdrop-blur-sm border-b border-gray-200 p-4">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="absolute top-0 left-0 right-0 z-20 bg-white/90 backdrop-blur-xl border-b border-gray-200/60 shadow-sm">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-gray-800">{mapData?.topic} Learning Map</h2>
-              <p className="text-sm text-gray-600">Explore the roadmap below</p>
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                {mapData?.topic} Learning Map
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">Explore your personalized roadmap</p>
             </div>
-            
+
             <div className="flex items-center gap-3">
               {/* Difficulty Filter */}
-              <div className="flex gap-2 bg-white rounded-lg p-1 shadow-sm border border-gray-200">
-                {['beginner', 'intermediate', 'advanced'].map(level => (
-                  <button
-                    key={level}
-                    onClick={() => setActiveFilter(activeFilter === level ? null : level)}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                      activeFilter === level
-                        ? 'bg-blue-500 text-white shadow-md'
-                        : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    {level.charAt(0).toUpperCase() + level.slice(1)}
-                  </button>
-                ))}
+              <div className="flex gap-2 bg-white/80 backdrop-blur-sm rounded-xl p-1.5 shadow-md border border-gray-200/60">
+                {(['beginner', 'intermediate', 'advanced'] as const).map((level) => {
+                  const isActive = activeFilter === level;
+                  const colors: Record<string, string> = {
+                    beginner: 'bg-green-500',
+                    intermediate: 'bg-yellow-500',
+                    advanced: 'bg-red-500',
+                  };
+                  return (
+                    <button
+                      key={level}
+                      onClick={() => setActiveFilter(isActive ? null : level)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+                        isActive
+                          ? `${colors[level]} text-white shadow-md scale-105`
+                          : 'text-gray-600 hover:bg-gray-100/80'
+                      }`}
+                    >
+                      {level.charAt(0).toUpperCase() + level.slice(1)}
+                    </button>
+                  );
+                })}
               </div>
 
               <button
                 onClick={handleExport}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-all shadow-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-gray-200/60 text-gray-700 rounded-xl hover:bg-gray-50/80 transition-all duration-300 shadow-sm hover:shadow-md"
               >
                 <Download className="w-4 h-4" />
                 Export
@@ -307,8 +599,9 @@ export default function AILearningMap() {
                   setShowMap(false);
                   setTopic('');
                   setMapData(null);
+                  setActiveFilter(null);
                 }}
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all shadow-md"
+                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-300 shadow-md hover:shadow-lg"
               >
                 New Map
               </button>
@@ -317,25 +610,95 @@ export default function AILearningMap() {
         </div>
 
         {/* React Flow */}
-        <div className="h-full w-full pt-24">
+        <div className="h-full w-full pt-20">
           <ReactFlow
             nodes={filteredNodes}
-            edges={edges}
+            edges={filteredEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            onInit={(instance) => {
+              reactFlowInstance.current = instance;
+            }}
             nodeTypes={nodeTypes}
             fitView
             fitViewOptions={{
-              padding: 0.2,
+              padding: 0.3,
               includeHiddenNodes: false,
+              duration: 800,
             }}
-            minZoom={0.1}
-            maxZoom={2}
-            className="bg-gradient-to-br from-gray-50 to-blue-50"
+            minZoom={0.2}
+            maxZoom={1.5}
+            defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+            className="bg-transparent"
           >
-            <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#cbd5e1" />
-            <Controls className="bg-white rounded-lg shadow-lg border border-gray-200" />
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={24}
+              size={1.5}
+              color="#cbd5e1"
+              className="opacity-40"
+            />
+            <Controls
+              className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200/60 p-1"
+              showZoom={true}
+              showFitView={true}
+              showInteractive={false}
+            />
+            <MiniMap
+              nodeColor={(node) => {
+                const level = node.data?.level;
+                const colors: Record<string, string> = {
+                  beginner: '#10b981',
+                  intermediate: '#f59e0b',
+                  advanced: '#ef4444',
+                };
+                return colors[level] || '#3b82f6';
+              }}
+              maskColor="rgba(0, 0, 0, 0.1)"
+              className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200/60"
+              pannable
+              zoomable
+            />
           </ReactFlow>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================
+  // LOADING STATE
+  // ============================================
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+        {/* Animated Background */}
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute inset-0 animate-pulse" style={{
+            backgroundImage: `radial-gradient(circle at 2px 2px, rgb(99 102 241 / 0.3) 1px, transparent 0)`,
+            backgroundSize: '60px 60px',
+          }} />
+        </div>
+
+        <div className="relative z-10 text-center max-w-2xl">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 mb-8 animate-pulse shadow-2xl">
+            <Sparkles className="w-10 h-10 text-white animate-spin" style={{ animationDuration: '2s' }} />
+          </div>
+
+          <h2 className="text-3xl font-bold text-gray-900 mb-4 animate-fade-in">
+            {loadingStage || 'Generating Your Learning Map...'}
+          </h2>
+          <p className="text-lg text-gray-600 mb-12 animate-fade-in-delay">
+            This may take a few moments
+          </p>
+
+          {/* Skeleton Nodes Preview */}
+          <div className="relative w-full h-96 mt-8">
+            <SkeletonNode x={50} y={50} />
+            <SkeletonNode x={400} y={80} />
+            <SkeletonNode x={400} y={280} />
+            <SkeletonNode x={750} y={100} />
+            <SkeletonNode x={750} y={260} />
+          </div>
         </div>
       </div>
     );
@@ -345,69 +708,129 @@ export default function AILearningMap() {
   // LANDING PAGE
   // ============================================
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col items-center justify-center p-4">
-      <div className="max-w-3xl w-full text-center mb-12">
-        <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Animated Background Pattern */}
+      <div className="absolute inset-0 opacity-30">
+        <div className="absolute inset-0 animate-pulse" style={{
+          backgroundImage: `radial-gradient(circle at 2px 2px, rgb(99 102 241 / 0.2) 1px, transparent 0)`,
+          backgroundSize: '50px 50px',
+        }} />
+      </div>
+
+      <div className="max-w-4xl w-full text-center mb-12 relative z-10">
+        {/* Badge */}
+        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 px-5 py-2.5 rounded-full text-sm font-semibold mb-8 shadow-sm animate-fade-in">
           <Sparkles className="w-4 h-4" />
           AI-Powered Learning Maps
         </div>
-        
-        <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6 leading-tight">
+
+        {/* Hero Text with Animation */}
+        <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight animate-fade-in-up">
           Transform Any Topic Into a
-          <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"> Learning Journey</span>
+          <br />
+          <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent animate-gradient">
+            Learning Journey
+          </span>
         </h1>
-        
-        <p className="text-xl text-gray-600 mb-8">
+
+        <p className="text-xl md:text-2xl text-gray-600 mb-12 animate-fade-in-up-delay max-w-2xl mx-auto">
           Enter any subject and watch AI generate an interactive roadmap to guide your learning path
         </p>
 
-        {/* Input Section */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8 border border-gray-100">
+        {/* Input Card */}
+        <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 md:p-10 border border-gray-200/60 mb-8 animate-fade-in-up-delay-2">
           <div className="space-y-6">
+            {/* Topic Input */}
             <div>
-              <label className="block text-left text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-left text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">
                 What do you want to learn?
               </label>
               <input
                 type="text"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleGenerate()}
+                onKeyPress={(e) => e.key === 'Enter' && !loading && topic.trim() && handleGenerate()}
                 placeholder="e.g., Web Development, Machine Learning, Python..."
-                className="w-full px-6 py-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition-all text-lg"
+                className="w-full px-6 py-4 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-lg shadow-sm hover:shadow-md"
               />
-            </div>
 
-            <div>
-              <label className="block text-left text-sm font-semibold text-gray-700 mb-3">
-                Choose your level
-              </label>
-              <div className="grid grid-cols-3 gap-3">
-                {(['beginner', 'intermediate', 'advanced'] as const).map((level) => (
+              {/* Example Topics */}
+              <div className="flex flex-wrap gap-2 mt-4 justify-start">
+                <span className="text-xs text-gray-500 font-medium mr-2">Try:</span>
+                {exampleTopics.map((example) => (
                   <button
-                    key={level}
-                    onClick={() => setDifficulty(level)}
-                    className={`px-6 py-3 rounded-xl font-medium transition-all ${
-                      difficulty === level
-                        ? 'bg-blue-500 text-white shadow-lg scale-105'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    key={example}
+                    onClick={() => {
+                      setTopic(example);
+                      setTimeout(() => {
+                        const input = document.querySelector('input[type="text"]') as HTMLInputElement;
+                        input?.focus();
+                      }, 100);
+                    }}
+                    className="px-4 py-1.5 text-sm bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-700 rounded-full transition-all duration-300 hover:scale-105 shadow-sm hover:shadow"
                   >
-                    {level.charAt(0).toUpperCase() + level.slice(1)}
+                    {example}
                   </button>
                 ))}
               </div>
             </div>
 
+            {/* Difficulty Selection */}
+            <div>
+              <label className="block text-left text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">
+                Choose your level
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                {(['beginner', 'intermediate', 'advanced'] as const).map((level) => {
+                  const colors: Record<string, { bg: string; hover: string; text: string }> = {
+                    beginner: {
+                      bg: 'bg-green-500',
+                      hover: 'hover:bg-green-600',
+                      text: 'text-white',
+                    },
+                    intermediate: {
+                      bg: 'bg-yellow-500',
+                      hover: 'hover:bg-yellow-600',
+                      text: 'text-white',
+                    },
+                    advanced: {
+                      bg: 'bg-red-500',
+                      hover: 'hover:bg-red-600',
+                      text: 'text-white',
+                    },
+                  };
+                  const isSelected = difficulty === level;
+                  const color = colors[level];
+
+                  return (
+                    <button
+                      key={level}
+                      onClick={() => setDifficulty(level)}
+                      className={`px-6 py-4 rounded-2xl font-bold text-sm transition-all duration-300 shadow-md ${
+                        isSelected
+                          ? `${color.bg} ${color.text} scale-105 shadow-lg ring-4 ring-offset-2 ring-offset-white ring-blue-500/30`
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-102'
+                      }`}
+                    >
+                      {level.charAt(0).toUpperCase() + level.slice(1)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Generate Button */}
             <button
               onClick={handleGenerate}
               disabled={loading || !topic.trim()}
-              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center gap-3"
+              className={`w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-5 rounded-2xl font-bold text-lg transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:scale-105 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none ${
+                !loading && topic.trim() ? 'animate-pulse-subtle' : ''
+              }`}
             >
               {loading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Generating Your Learning Map...
+                  Generating...
                 </>
               ) : (
                 <>
@@ -420,30 +843,99 @@ export default function AILearningMap() {
         </div>
 
         {/* Features */}
-        <div className="grid grid-cols-3 gap-6 mt-12">
-          <div className="text-center">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Sparkles className="w-6 h-6 text-blue-600" />
-            </div>
-            <h3 className="font-semibold text-gray-800 mb-1">AI-Powered</h3>
-            <p className="text-sm text-gray-600">Smart roadmap generation</p>
-          </div>
-          <div className="text-center">
-            <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Filter className="w-6 h-6 text-purple-600" />
-            </div>
-            <h3 className="font-semibold text-gray-800 mb-1">Customizable</h3>
-            <p className="text-sm text-gray-600">Filter by difficulty level</p>
-          </div>
-          <div className="text-center">
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Download className="w-6 h-6 text-green-600" />
-            </div>
-            <h3 className="font-semibold text-gray-800 mb-1">Exportable</h3>
-            <p className="text-sm text-gray-600">Download as JSON</p>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 animate-fade-in-up-delay-3">
+          {[
+            { icon: Sparkles, title: 'AI-Powered', desc: 'Smart roadmap generation', color: 'blue' },
+            { icon: Filter, title: 'Customizable', desc: 'Filter by difficulty level', color: 'purple' },
+            { icon: Download, title: 'Exportable', desc: 'Download as JSON', color: 'green' },
+          ].map((feature, idx) => {
+            const Icon = feature.icon;
+            const colorClasses: Record<string, string> = {
+              blue: 'bg-blue-100 text-blue-600',
+              purple: 'bg-purple-100 text-purple-600',
+              green: 'bg-green-100 text-green-600',
+            };
+
+            return (
+              <div
+                key={idx}
+                className="text-center p-6 bg-white/60 backdrop-blur-sm rounded-2xl border border-gray-200/60 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105"
+              >
+                <div className={`w-14 h-14 ${colorClasses[feature.color]} rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm`}>
+                  <Icon className="w-7 h-7" />
+                </div>
+                <h3 className="font-bold text-gray-800 mb-2">{feature.title}</h3>
+                <p className="text-sm text-gray-600">{feature.desc}</p>
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {/* Custom CSS for animations */}
+      <style jsx>{`
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        @keyframes fade-in-up {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes gradient {
+          0%, 100% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
+        }
+
+        .animate-fade-in {
+          animation: fade-in 0.6s ease-out;
+        }
+
+        .animate-fade-in-delay {
+          animation: fade-in 0.6s ease-out 0.2s both;
+        }
+
+        .animate-fade-in-up {
+          animation: fade-in-up 0.8s ease-out;
+        }
+
+        .animate-fade-in-up-delay {
+          animation: fade-in-up 0.8s ease-out 0.2s both;
+        }
+
+        .animate-fade-in-up-delay-2 {
+          animation: fade-in-up 0.8s ease-out 0.4s both;
+        }
+
+        .animate-fade-in-up-delay-3 {
+          animation: fade-in-up 0.8s ease-out 0.6s both;
+        }
+
+        .animate-gradient {
+          background-size: 200% 200%;
+          animation: gradient 3s ease infinite;
+        }
+
+        .animate-pulse-subtle {
+          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+      `}</style>
     </div>
   );
 }
