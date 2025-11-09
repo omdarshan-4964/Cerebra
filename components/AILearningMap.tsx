@@ -32,31 +32,14 @@ import {
   Play,
 } from 'lucide-react';
 
+// New imports
+import { LearningMapData, LearningNode, Resource } from '../lib/types';
+import { saveMapToHistory, getMapHistory } from '../hooks/useLocalStorage';
+import useToast from '../hooks/useToast';
+import ToastContainer from './ui/Toast';
+
 // ============================================
-// TYPES
-// ============================================
-interface LearningNode {
-  id: string;
-  title: string;
-  description: string;
-  level: 'beginner' | 'intermediate' | 'advanced';
-  category: string;
-  resources?: Resource[];
-  children?: string[];
-}
-
-interface Resource {
-  type: 'video' | 'article' | 'book';
-  title: string;
-  url: string;
-}
-
-interface LearningMapData {
-  topic: string;
-  nodes: LearningNode[];
-  edges: { from: string; to: string }[];
-}
-
+// (Types imported from lib/types.ts)
 // ============================================
 // CUSTOM NODE COMPONENT - Premium Design
 // ============================================
@@ -192,6 +175,22 @@ const CustomNode = React.memo(({ data, selected }: NodeProps) => {
 
           {/* Description */}
           <p className="text-sm text-gray-600 mb-4 leading-relaxed">{data.description}</p>
+
+          {/* Completion checkbox */}
+          <div className="flex items-center gap-2 mb-3">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={Boolean(data.completed)}
+                onChange={(e) => {
+                  // emit a custom event to allow parent to update node state
+                  window.dispatchEvent(new CustomEvent('cerebra-toggle-complete', { detail: { id: data.id, completed: e.target.checked } }));
+                }}
+                className="w-4 h-4 rounded"
+              />
+              <span className="text-xs">Mark completed</span>
+            </label>
+          </div>
 
           {/* Resources - Expandable on Hover */}
           {data.resources && data.resources.length > 0 && (
@@ -425,6 +424,11 @@ export default function AILearningMap() {
   const [mapData, setMapData] = useState<LearningMapData | null>(null);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [nodeEntered, setNodeEntered] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [savedMaps, setSavedMaps] = useState(() => getMapHistory());
+  const [showHistory, setShowHistory] = useState(false);
+
+  const toast = useToast();
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -475,6 +479,15 @@ export default function AILearningMap() {
       setLoadingStage('Finalizing...');
       setMapData(data);
 
+      // Persist generated map to history (user can load later)
+      try {
+        saveMapToHistory(data);
+        setSavedMaps(getMapHistory());
+        toast.success('Saved map to history');
+      } catch (e) {
+        // ignore
+      }
+
       const { nodes: flowNodes, edges: flowEdges } = getLayoutedElements(data.nodes, data.edges);
       setNodes(flowNodes);
       setEdges(flowEdges);
@@ -502,23 +515,25 @@ export default function AILearningMap() {
   // FILTER NODES
   // ============================================
   const filteredNodes = useMemo(() => {
-    if (!activeFilter) return nodes;
-    const filtered = nodes.filter((node) => node.data.level === activeFilter);
-    // Also filter edges to only show connections between visible nodes
-    const visibleIds = new Set(filtered.map((n) => n.id));
-    return filtered.map((node) => ({
+    let base = nodes;
+    if (activeFilter) {
+      base = base.filter((node) => node.data.level === activeFilter);
+    }
+    if (searchTerm && searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      base = base.filter((node) => (node.data.title || '').toLowerCase().includes(q));
+    }
+
+    return base.map((node, idx) => ({
       ...node,
-      // Add animation class
       className: nodeEntered ? 'animate-fade-in' : '',
+      style: { ...(node.style || {}), transitionDelay: `${idx * 80}ms` },
     }));
   }, [nodes, activeFilter, nodeEntered]);
 
   const filteredEdges = useMemo(() => {
-    if (!activeFilter) return edges;
     const visibleIds = new Set(filteredNodes.map((n) => n.id));
-    return edges.filter(
-      (edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target)
-    );
+    return edges.filter((edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target));
   }, [edges, activeFilter, filteredNodes]);
 
   // ============================================
@@ -536,12 +551,62 @@ export default function AILearningMap() {
     linkElement.click();
   }, [mapData]);
 
+  // Auto-save current map snapshot to a dedicated autosave key
+  useEffect(() => {
+    try {
+      if (mapData) {
+        localStorage.setItem('cerebra:autosave', JSON.stringify({ mapData, savedAt: new Date().toISOString() }));
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [mapData, nodes, edges]);
+
+  // Listen for completion toggle events from nodes
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { id: string; completed: boolean } | undefined;
+      if (!detail) return;
+      const { id, completed } = detail;
+      setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, data: { ...n.data, completed } } : n)));
+      setMapData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          nodes: prev.nodes.map((n) => (n.id === id ? { ...n, completed } : n)),
+        };
+      });
+    };
+    window.addEventListener('cerebra-toggle-complete', handler as EventListener);
+    return () => window.removeEventListener('cerebra-toggle-complete', handler as EventListener);
+  }, [setNodes]);
+
+  // Keyboard shortcuts: Ctrl/Cmd+S to save, Esc to go back
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (mapData) {
+          const saved = saveMapToHistory(mapData);
+          setSavedMaps(getMapHistory());
+          toast.success('Map saved');
+        }
+      }
+      if (e.key === 'Escape') {
+        setShowMap(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mapData]);
+
   // ============================================
   // MAP VIEW
   // ============================================
   if (showMap) {
     return (
       <div className="h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 relative overflow-hidden">
+      <ToastContainer />
         {/* Animated Background Pattern */}
         <div className="absolute inset-0 opacity-30">
           <div className="absolute inset-0" style={{
@@ -557,10 +622,21 @@ export default function AILearningMap() {
               <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 {mapData?.topic} Learning Map
               </h2>
+              {mapData?.templateName && (
+                <div className="mt-1 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
+                  Curated Template: {mapData.templateName}
+                </div>
+              )}
               <p className="text-sm text-gray-600 mt-1">Explore your personalized roadmap</p>
             </div>
 
             <div className="flex items-center gap-3">
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search nodes..."
+                className="px-3 py-2 rounded-lg border border-gray-200/60 bg-white/80 text-sm focus:outline-none"
+              />
               {/* Difficulty Filter */}
               <div className="flex gap-2 bg-white/80 backdrop-blur-sm rounded-xl p-1.5 shadow-md border border-gray-200/60">
                 {(['beginner', 'intermediate', 'advanced'] as const).map((level) => {
@@ -592,6 +668,18 @@ export default function AILearningMap() {
               >
                 <Download className="w-4 h-4" />
                 Export
+              </button>
+
+              <button
+                onClick={() => {
+                  if (!mapData) return;
+                  saveMapToHistory(mapData);
+                  setSavedMaps(getMapHistory());
+                  toast.success('Map saved to history');
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-gray-200/60 text-gray-700 rounded-xl hover:bg-gray-50/80 transition-all duration-300 shadow-sm hover:shadow-md"
+              >
+                Save
               </button>
 
               <button
@@ -709,6 +797,7 @@ export default function AILearningMap() {
   // ============================================
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      <ToastContainer />
       {/* Animated Background Pattern */}
       <div className="absolute inset-0 opacity-30">
         <div className="absolute inset-0 animate-pulse" style={{
@@ -840,6 +929,49 @@ export default function AILearningMap() {
               )}
             </button>
           </div>
+        </div>
+
+        {/* Load previous maps */}
+        <div className="max-w-4xl w-full text-center mb-6 relative z-10">
+          <div className="flex justify-center">
+            <button
+              onClick={() => setShowHistory((s) => !s)}
+              className="px-4 py-2 rounded-full bg-white/80 border border-gray-200/60 shadow-sm hover:shadow-md"
+            >
+              Load Previous Maps
+            </button>
+          </div>
+
+          {showHistory && (
+            <div className="mt-4 bg-white/80 rounded-2xl p-4 border border-gray-200/60 shadow-sm max-h-64 overflow-auto">
+              {savedMaps.length === 0 && <div className="text-sm text-gray-600">No saved maps yet.</div>}
+              {savedMaps.map((m) => (
+                <div key={m.id} className="flex items-center justify-between gap-3 py-2 border-b last:border-b-0">
+                  <div>
+                    <div className="font-semibold">{m.topic}</div>
+                    <div className="text-xs text-gray-500">Saved {new Date(m.savedAt).toLocaleString()}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setMapData(m);
+                        const { nodes: flowNodes, edges: flowEdges } = getLayoutedElements(m.nodes, m.edges);
+                        setNodes(flowNodes);
+                        setEdges(flowEdges);
+                        setShowMap(true);
+                        setShowHistory(false);
+                        toast.success('Loaded map from history');
+                      }}
+                      className="px-3 py-1 rounded bg-blue-500 text-white text-sm"
+                    >
+                      Load
+                    </button>
+                    <a href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(m, null, 2))}`} download={`${m.topic.replace(/\s+/g,'-').toLowerCase()}-map.json`} className="px-3 py-1 rounded bg-white border">Export</a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Features */}
