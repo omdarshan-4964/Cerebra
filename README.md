@@ -34,10 +34,14 @@ Cerebra helps learners generate **structured, interactive learning roadmaps** fo
 
 ---
 
-## 🧩 System Overview
+## System Overview
 
-```
-User Input → API Route (Google Gemini) → Generate Learning Topics → Create Nodes & Edges → Render Map (React Flow)
+```mermaid
+graph LR
+    A["User Input"] --> B["API Route (Google Gemini)"]
+    B --> C["Generate Learning Topics"]
+    C --> D["Create Nodes & Edges"]
+    D --> E["Render Map (React Flow)"]
 ```
 
 Each node represents a concept with a difficulty level and related resources. The roadmap features:
