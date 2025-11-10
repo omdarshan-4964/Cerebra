@@ -22,6 +22,12 @@ export interface EdgeDef {
   to: string;
 }
 
+export interface LearningMapProgress {
+  completedNodes: string[];
+  lastUpdated: string;
+  totalNodes: number;
+}
+
 export interface LearningMapData {
   topic: string;
   nodes: LearningNode[];
@@ -29,6 +35,18 @@ export interface LearningMapData {
   // optional metadata
   templateId?: string;
   templateName?: string;
+  progress?: LearningMapProgress;
 }
 
-export type MapHistoryItem = LearningMapData & { savedAt: string; id: string };
+export type MapHistoryItem = LearningMapData & {
+  savedAt: string;
+  id: string;
+  progress?: LearningMapProgress;
+};
+
+export interface SearchResult {
+  id: string;
+  label: string;
+  description?: string;
+  matches: number;
+}

@@ -30,20 +30,30 @@ import {
   FileText,
   Book,
   Play,
+  Search,
+  Share,
 } from 'lucide-react';
 
-// New imports
+// Component imports
 import { LearningMapData, LearningNode, Resource } from '../lib/types';
 import { saveMapToHistory, getMapHistory } from '../hooks/useLocalStorage';
 import useToast from '../hooks/useToast';
 import ToastContainer from './ui/Toast';
+import SearchBar from './ui/SearchBar';
+import ProgressIndicator from './ui/ProgressIndicator';
+import { useProgress } from '../hooks/useLocalStorage';
+import useKeyboardShortcuts from '../hooks/useKeyboardShortcuts';
 
 // ============================================
 // (Types imported from lib/types.ts)
 // ============================================
 // CUSTOM NODE COMPONENT - Premium Design
 // ============================================
-const CustomNode = React.memo(({ data, selected }: NodeProps) => {
+interface CustomNodeData extends LearningNode {
+  isHighlighted?: boolean;
+}
+
+const CustomNode = React.memo(({ data, selected }: NodeProps<CustomNodeData>) => {
   const [isHovered, setIsHovered] = useState(false);
 
   const getIcon = useCallback((category: string) => {
@@ -143,6 +153,8 @@ const CustomNode = React.memo(({ data, selected }: NodeProps) => {
         className={`relative rounded-2xl p-6 backdrop-blur-xl bg-white/80 border-2 transition-all duration-300 ${
           isHovered || selected
             ? 'shadow-2xl border-blue-400/60 scale-105'
+            : data.isHighlighted
+            ? 'shadow-lg border-yellow-400/60 ring-4 ring-yellow-200/30'
             : 'shadow-md border-gray-200/60'
         } ${categoryColors.border}`}
         style={{
@@ -241,6 +253,37 @@ const CustomNode = React.memo(({ data, selected }: NodeProps) => {
 CustomNode.displayName = 'CustomNode';
 
 // ============================================
+// COLORS AND STYLES
+// ============================================
+const categoryColors: Record<string, { start: string; end: string }> = {
+  frontend: { start: '#9333ea', end: '#db2777' },
+  backend: { start: '#2563eb', end: '#0891b2' },
+  database: { start: '#059669', end: '#65a30d' },
+  general: { start: '#4f46e5', end: '#7c3aed' },
+  fundamentals: { start: '#ea580c', end: '#dc2626' },
+  tools: { start: '#0d9488', end: '#0284c7' },
+  default: { start: '#3b82f6', end: '#6366f1' },
+};
+
+const levelOpacity: Record<string, number> = {
+  beginner: 0.8,
+  intermediate: 0.9,
+  advanced: 1,
+};
+
+// SVG gradient definitions for edge colors
+const EdgeGradients = () => (
+  <defs>
+    {Object.entries(categoryColors).map(([category, colors]) => (
+      <linearGradient key={category} id={`${category}-gradient`} x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stopColor={colors.start} />
+        <stop offset="100%" stopColor={colors.end} />
+      </linearGradient>
+    ))}
+  </defs>
+);
+
+// ============================================
 // NODE TYPES
 // ============================================
 const nodeTypes = {
@@ -320,26 +363,32 @@ const getLayoutedElements = (nodes: LearningNode[], edges: { from: string; to: s
       y: currentY,
     });
 
-    // Position children
-    let childStartY = startY;
-    for (const childId of children) {
-      const childHeight = subtreeHeights.get(childId) || NODE_HEIGHT;
-      childStartY = positionNode(childId, level + 1, childStartY);
-      childStartY += VERTICAL_SPACING;
-    }
+  // Position children with dynamic spacing based on content
+  let childStartY = startY;
+  for (const childId of children) {
+    const child = nodeMap.get(childId);
+    const childHeight = subtreeHeights.get(childId) || NODE_HEIGHT;
+    
+    // Adjust spacing based on content length
+    const contentBasedSpacing = child 
+      ? Math.min(VERTICAL_SPACING * 1.5, 
+          VERTICAL_SPACING + (child.description?.length || 0) / 50 * VERTICAL_SPACING)
+      : VERTICAL_SPACING;
+    
+    childStartY = positionNode(childId, level + 1, childStartY);
+    childStartY += contentBasedSpacing;
+  }
 
-    return startY + subtreeHeight;
+  return startY + subtreeHeight;
   };
 
-  // Start positioning from root
-  positionNode(rootNode.id, 0, 0);
+  // Start positioning from root with proper centering
+  const startY = positionNode(rootNode.id, 0, 0);
 
-  // Center root vertically
+  // Center the entire graph
   const rootY = positions.get(rootNode.id)?.y || 0;
   const totalHeight = subtreeHeights.get(rootNode.id) || NODE_HEIGHT;
-  const centerOffset = (totalHeight - NODE_HEIGHT) / 2;
-
-  positions.forEach((pos, nodeId) => {
+  const centerOffset = (totalHeight - NODE_HEIGHT) / 2;  positions.forEach((pos, nodeId) => {
     if (nodeId === rootNode.id) {
       pos.y = -centerOffset;
     } else {
@@ -357,37 +406,72 @@ const getLayoutedElements = (nodes: LearningNode[], edges: { from: string; to: s
     targetPosition: Position.Left,
   }));
 
-  // Create edges with gradients based on level
-  const getEdgeColor = (sourceLevel: string) => {
-    const colors: Record<string, string> = {
-      beginner: '#10b981',
-      intermediate: '#f59e0b',
-      advanced: '#ef4444',
-    };
-    return colors[sourceLevel] || '#3b82f6';
+  // Create edges with improved visual design
+  const categoryColors: Record<string, { start: string; end: string }> = {
+    frontend: { start: '#9333ea', end: '#db2777' },
+    backend: { start: '#2563eb', end: '#0891b2' },
+    database: { start: '#059669', end: '#65a30d' },
+    general: { start: '#4f46e5', end: '#7c3aed' },
+    fundamentals: { start: '#ea580c', end: '#dc2626' },
+    tools: { start: '#0d9488', end: '#0284c7' },
+    default: { start: '#3b82f6', end: '#6366f1' },
   };
+
+  const levelOpacity: Record<string, number> = {
+    beginner: 0.8,
+    intermediate: 0.9,
+    advanced: 1,
+  };
+
+  const getEdgeStyles = (sourceNode: LearningNode | undefined, targetNode: LearningNode | undefined) => {
+    // Get colors based on nodes' categories and levels
+    const sourceCategory = (sourceNode?.category?.toLowerCase() || 'default') as keyof typeof categoryColors;
+    const sourceLevel = (sourceNode?.level || 'beginner') as keyof typeof levelOpacity;
+    const targetCompleted = targetNode?.completed || false;
+
+    const colors = categoryColors[sourceCategory];
+    const opacity = levelOpacity[sourceLevel];
+
+    return {
+      animated: !targetCompleted, // Only animate edges to incomplete nodes
+      style: {
+        strokeWidth: targetCompleted ? 2 : 3,
+        opacity: targetCompleted ? 0.6 : opacity,
+        stroke: `url('#${sourceCategory}-gradient')`,
+        filter: targetCompleted ? 'none' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+      },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        width: targetCompleted ? 20 : 24,
+        height: targetCompleted ? 20 : 24,
+        color: colors.end,
+      },
+    };
+  };
+
+  // Create gradient definitions for each category
+  const gradientDefs = (
+    <defs>
+      {Object.entries(categoryColors).map(([category, colors]) => (
+        <linearGradient key={category} id={`${category}-gradient`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={colors.start} />
+          <stop offset="100%" stopColor={colors.end} />
+        </linearGradient>
+      ))}
+    </defs>
+  );
 
   const flowEdges: Edge[] = edges.map((edge, idx) => {
     const sourceNode = nodeMap.get(edge.from);
-    const edgeColor = getEdgeColor(sourceNode?.level || 'beginner');
+    const targetNode = nodeMap.get(edge.to);
+    const styles = getEdgeStyles(sourceNode, targetNode);
 
     return {
       id: `edge-${idx}`,
       source: edge.from,
       target: edge.to,
       type: 'smoothstep',
-      animated: true,
-      style: {
-        stroke: edgeColor,
-        strokeWidth: 3,
-        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
-      },
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 24,
-        height: 24,
-        color: edgeColor,
-      },
+      ...styles,
     };
   });
 
@@ -427,6 +511,9 @@ export default function AILearningMap() {
   const [searchTerm, setSearchTerm] = useState('');
   const [savedMaps, setSavedMaps] = useState(() => getMapHistory());
   const [showHistory, setShowHistory] = useState(false);
+  const [searchMatchCount, setSearchMatchCount] = useState(0);
+  const [mapId] = useState(() => `map-${Date.now()}`);
+  const { progress, toggleNodeCompletion } = useProgress(mapId);
 
   const toast = useToast();
 
@@ -453,30 +540,57 @@ export default function AILearningMap() {
     }
 
     setLoading(true);
-    setLoadingStage('Analyzing topic...');
+    setLoadingStage('Generating AI learning map...');
+    console.log('🔄 Generating map for topic:', topic, 'at level:', difficulty);
 
     try {
-      // Simulate progress stages
-      setTimeout(() => setLoadingStage('Building roadmap...'), 1000);
-      setTimeout(() => setLoadingStage('Generating resources...'), 2000);
-
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic, difficulty }),
       });
 
+      console.log('📡 API Response status:', response.status);
       if (!response.ok) {
         throw new Error(`API Error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log('📊 API Response data:', data);
 
-      if (!data.nodes || !data.edges) {
-        throw new Error('Invalid data format received from API');
+      // Validate response data structure
+      if (!data.nodes || !Array.isArray(data.nodes) || data.nodes.length === 0) {
+        throw new Error('Invalid or empty nodes array in API response');
+      }
+      if (!data.edges || !Array.isArray(data.edges)) {
+        throw new Error('Invalid edges array in API response');
       }
 
-      setLoadingStage('Finalizing...');
+      // Validate each node has required fields
+      data.nodes.forEach((node: any, index: number) => {
+        if (!node.id || !node.title || !node.description || !node.level || !node.category) {
+          throw new Error(`Invalid node data at index ${index}: missing required fields`);
+        }
+      });
+
+      // Validate edges reference existing nodes
+      const nodeIds = new Set(data.nodes.map((n: any) => n.id));
+      data.edges.forEach((edge: any, index: number) => {
+        if (!edge.from || !edge.to) {
+          throw new Error(`Invalid edge data at index ${index}: missing from/to fields`);
+        }
+        if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) {
+          throw new Error(`Invalid edge data at index ${index}: references non-existent node`);
+        }
+      });
+
+      console.log('✅ Data validation passed:', {
+        nodes: data.nodes.length,
+        edges: data.edges.length,
+        source: data.templateSource
+      });
+
+      setLoadingStage('Organizing map layout...');
       setMapData(data);
 
       // Persist generated map to history (user can load later)
@@ -519,15 +633,43 @@ export default function AILearningMap() {
     if (activeFilter) {
       base = base.filter((node) => node.data.level === activeFilter);
     }
+
+    let matchCount = 0;
     if (searchTerm && searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      base = base.filter((node) => (node.data.title || '').toLowerCase().includes(q));
+      base = base.map(node => {
+        const matches = (
+          (node.data.title || '').toLowerCase().includes(q) ||
+          (node.data.description || '').toLowerCase().includes(q)
+        );
+        if (matches) matchCount++;
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            isHighlighted: matches
+          }
+        };
+      }).filter(node => !searchTerm || node.data.isHighlighted);
+    } else {
+      base = base.map(node => ({
+        ...node,
+        data: {
+          ...node.data,
+          isHighlighted: false
+        }
+      }));
     }
+
+    setSearchMatchCount(matchCount);
 
     return base.map((node, idx) => ({
       ...node,
       className: nodeEntered ? 'animate-fade-in' : '',
-      style: { ...(node.style || {}), transitionDelay: `${idx * 80}ms` },
+      style: { 
+        ...(node.style || {}), 
+        transitionDelay: `${idx * 80}ms`,
+      },
     }));
   }, [nodes, activeFilter, nodeEntered]);
 
@@ -541,7 +683,15 @@ export default function AILearningMap() {
   // ============================================
   const handleExport = useCallback(() => {
     if (!mapData) return;
-    const dataStr = JSON.stringify(mapData, null, 2);
+    const exportData = {
+      ...mapData,
+      progress: {
+        completedNodes: progress.completedNodes,
+        lastUpdated: new Date().toISOString(),
+        totalNodes: nodes.length
+      }
+    };
+    const dataStr = JSON.stringify(exportData, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
     const exportFileDefaultName = `${mapData.topic.toLowerCase().replace(/\s+/g, '-')}-learning-map.json`;
 
@@ -576,29 +726,67 @@ export default function AILearningMap() {
           nodes: prev.nodes.map((n) => (n.id === id ? { ...n, completed } : n)),
         };
       });
+      toggleNodeCompletion(id, completed);
     };
     window.addEventListener('cerebra-toggle-complete', handler as EventListener);
     return () => window.removeEventListener('cerebra-toggle-complete', handler as EventListener);
   }, [setNodes]);
 
-  // Keyboard shortcuts: Ctrl/Cmd+S to save, Esc to go back
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
+  // Handle fullscreen
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  }, []);
+
+  // Setup keyboard shortcuts
+  const shortcuts = useKeyboardShortcuts([
+    {
+      key: 's',
+      ctrlKey: true,
+      description: 'Save current map',
+      action: () => {
         if (mapData) {
           const saved = saveMapToHistory(mapData);
           setSavedMaps(getMapHistory());
           toast.success('Map saved');
         }
       }
-      if (e.key === 'Escape') {
-        setShowMap(false);
+    },
+    {
+      key: 'Escape',
+      description: 'Go back to home',
+      action: () => {
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+          setIsFullscreen(false);
+        } else {
+          setShowMap(false);
+        }
       }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [mapData]);
+    },
+    {
+      key: 'f',
+      description: 'Toggle fullscreen',
+      action: toggleFullscreen
+    },
+    {
+      key: '/',
+      description: 'Focus search',
+      action: () => {
+        const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
+        if (searchInput) {
+          searchInput.focus();
+        }
+      }
+    }
+  ]);
 
   // ============================================
   // MAP VIEW
@@ -628,14 +816,19 @@ export default function AILearningMap() {
                 </div>
               )}
               <p className="text-sm text-gray-600 mt-1">Explore your personalized roadmap</p>
+              <ProgressIndicator 
+                completed={progress.completedNodes.length} 
+                total={nodes.length}
+                className="mt-2"
+              />
             </div>
 
             <div className="flex items-center gap-3">
-              <input
+              <SearchBar
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search nodes..."
-                className="px-3 py-2 rounded-lg border border-gray-200/60 bg-white/80 text-sm focus:outline-none"
+                onChange={setSearchTerm}
+                matchCount={searchTerm ? searchMatchCount : undefined}
+                className="w-64"
               />
               {/* Difficulty Filter */}
               <div className="flex gap-2 bg-white/80 backdrop-blur-sm rounded-xl p-1.5 shadow-md border border-gray-200/60">
@@ -706,6 +899,7 @@ export default function AILearningMap() {
             onEdgesChange={onEdgesChange}
             onInit={(instance) => {
               reactFlowInstance.current = instance;
+              instance.fitView({ padding: 0.3, duration: 800 });
             }}
             nodeTypes={nodeTypes}
             fitView
@@ -719,6 +913,9 @@ export default function AILearningMap() {
             defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
             className="bg-transparent"
           >
+            {/* SVG Gradients for edges */}
+            <EdgeGradients />
+            
             <Background
               variant={BackgroundVariant.Dots}
               gap={24}
@@ -734,13 +931,8 @@ export default function AILearningMap() {
             />
             <MiniMap
               nodeColor={(node) => {
-                const level = node.data?.level;
-                const colors: Record<string, string> = {
-                  beginner: '#10b981',
-                  intermediate: '#f59e0b',
-                  advanced: '#ef4444',
-                };
-                return colors[level] || '#3b82f6';
+                const category = node.data?.category?.toLowerCase() || 'default';
+                return categoryColors[category as keyof typeof categoryColors]?.start || '#3b82f6';
               }}
               maskColor="rgba(0, 0, 0, 0.1)"
               className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200/60"

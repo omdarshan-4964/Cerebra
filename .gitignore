@@ -35,3 +35,18 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# 🔬 Local test & debug scripts
+test-*.js
+tests/
+__tests__/
+*.spec.js
+*.test.js
+*.test.ts
+*.spec.ts
+
+# Temporary debug outputs
+*.log
+debug/
+tmp/
+
+
