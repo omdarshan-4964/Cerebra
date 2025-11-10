@@ -1,68 +1,114 @@
-import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { detectRoadmap } from '../../../lib/roadmap-detector';
-import ROADMAP_TEMPLATES from '../../../lib/roadmap-templates';
+import { NextResponse } from "next/server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export async function POST(request: Request) {
   try {
-    const { topic = '', difficulty = 'beginner' } = (await request.json()) as {
-      topic?: string;
-      difficulty?: string;
-    };
+    const { topic, difficulty } = await request.json();
 
-    // First, try to detect a curated template
-    const detected = detectRoadmap(topic || '');
-    if (detected) {
-      // Attach metadata if using curated template
-      return NextResponse.json({ ...detected, templateSource: 'curated' });
-    }
+    console.log("📥 API received:", { topic, difficulty });
 
-    // Fallback to generative API
-    if (!process.env.GEMINI_API_KEY) {
-      console.error('GEMINI_API_KEY is not set!');
+    // 1️⃣ Check API key
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error("❌ GEMINI_API_KEY not set");
       return NextResponse.json(
-        { error: 'API key not configured. Please add GEMINI_API_KEY to .env.local' },
+        { error: "Server misconfiguration: API key missing" },
         { status: 500 }
       );
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    // 2️⃣ Initialize Gemini
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    console.log("✅ Using model:", model.model);
 
-    const prompt = `You are an expert learning path designer. Create a comprehensive learning roadmap for "${topic}" at ${difficulty} level. Return ONLY a valid JSON object describing topic, nodes and edges. Use realistic resource URLs (MDN, official docs, YouTube, etc.). Keep descriptions short (<=15 words).`;
+    // 3️⃣ Build the prompt
+    const prompt = `You are an expert learning path designer. Create a comprehensive learning roadmap specifically for "${topic}" at ${difficulty} level.
 
+CRITICAL: The roadmap MUST be about "${topic}" and nothing else.
+
+Return ONLY a valid JSON object (no markdown, no code blocks) with this EXACT structure:
+
+{
+  "topic": "${topic}",
+  "nodes": [
+    {
+      "id": "1",
+      "title": "Main concept for ${topic}",
+      "description": "Brief 10-15 word description",
+      "level": "${difficulty}",
+      "category": "general",
+      "resources": [
+        {
+          "type": "article",
+          "title": "Resource name",
+          "url": "https://example.com"
+        }
+      ],
+      "children": ["2", "3"]
+    }
+  ],
+  "edges": [
+    {"from": "1", "to": "2"}
+  ]
+}
+
+Requirements:
+- Create 7-10 nodes specifically about "${topic}"
+- Each node must have unique id (numbers as strings)
+- Include 1-2 real resources per node (MDN, official docs, YouTube)
+- Use categories: general, frontend, backend, database, fundamentals, tools
+- Keep descriptions under 15 words
+- Create logical parent-child hierarchy
+- Topic field must be exactly: "${topic}"
+
+IMPORTANT: Generate content ONLY about "${topic}". Do not substitute with similar topics.`;
+
+    console.log("🤖 Calling Gemini for:", topic);
+
+    // 4️⃣ Call Gemini
     const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    if (!result.response) throw new Error("No response from Gemini");
 
-    // Try to extract JSON from possibly noisy text
+    const text = result.response.text();
+    console.log("📝 Gemini response received, length:", text?.length);
+
+    // 5️⃣ Clean and parse JSON
     let cleanedText = text.trim();
-    cleanedText = cleanedText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+    cleanedText = cleanedText
+      .replace(/^```json\s*/i, "")
+      .replace(/```$/i, "")
+      .replace(/[\u0000-\u001F]+/g, ""); // removes control chars
+
     const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error('No JSON found in response');
-      throw new Error('Invalid response format - no JSON found');
+      console.error("❌ Gemini did not return JSON:", cleanedText.slice(0, 500));
+      throw new Error("No valid JSON found in Gemini response");
     }
 
     const learningMap = JSON.parse(jsonMatch[0]);
 
-    // Basic validation
-    if (!learningMap.nodes || !Array.isArray(learningMap.nodes)) {
-      throw new Error('Invalid response: missing nodes array');
+    // 6️⃣ Validate structure
+    if (!Array.isArray(learningMap.nodes)) {
+      throw new Error("Invalid or missing 'nodes' array");
     }
-    if (!learningMap.edges || !Array.isArray(learningMap.edges)) {
-      throw new Error('Invalid response: missing edges array');
+    if (!Array.isArray(learningMap.edges)) {
+      throw new Error("Invalid or missing 'edges' array");
     }
 
-    return NextResponse.json({ ...learningMap, templateSource: 'generated' });
+    // 7️⃣ Force topic to match request
+    learningMap.topic = topic;
+
+    console.log(
+      `✅ Successfully generated map for "${learningMap.topic}" with ${learningMap.nodes.length} nodes`
+    );
+
+    return NextResponse.json(learningMap);
   } catch (error) {
-    console.error('API Error:', error);
-    if (error instanceof Error) {
-      return NextResponse.json(
-        { error: `Failed to generate learning map: ${error.message}` },
-        { status: 500 }
-      );
-    }
-    return NextResponse.json({ error: 'Failed to generate learning map' }, { status: 500 });
+    console.error("❌ API Error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
 }

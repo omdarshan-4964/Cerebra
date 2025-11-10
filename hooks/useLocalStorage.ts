@@ -1,7 +1,39 @@
 import { useState, useEffect, useCallback } from 'react';
-import { LearningMapData, MapHistoryItem } from '../lib/types';
+import { LearningMapData, MapHistoryItem, LearningMapProgress } from '../lib/types';
 
 const HISTORY_KEY = 'cerebra:mapHistory';
+const PROGRESS_KEY = 'cerebra:mapProgress';
+
+export function useProgress(mapId: string) {
+  const [progress, setProgress] = useState<LearningMapProgress>(() => {
+    try {
+      const raw = localStorage.getItem(`${PROGRESS_KEY}:${mapId}`);
+      return raw ? JSON.parse(raw) : { completedNodes: [], lastUpdated: new Date().toISOString(), totalNodes: 0 };
+    } catch (e) {
+      return { completedNodes: [], lastUpdated: new Date().toISOString(), totalNodes: 0 };
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(`${PROGRESS_KEY}:${mapId}`, JSON.stringify(progress));
+  }, [mapId, progress]);
+
+  const toggleNodeCompletion = useCallback((nodeId: string, completed: boolean) => {
+    setProgress(prev => {
+      const newCompleted = completed
+        ? [...prev.completedNodes, nodeId]
+        : prev.completedNodes.filter(id => id !== nodeId);
+      
+      return {
+        ...prev,
+        completedNodes: newCompleted,
+        lastUpdated: new Date().toISOString()
+      };
+    });
+  }, []);
+
+  return { progress, toggleNodeCompletion };
+}
 
 export function useLocalStorage<T>(key: string, initialValue: T) {
   const [state, setState] = useState<T>(() => {
