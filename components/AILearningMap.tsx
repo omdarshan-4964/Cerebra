@@ -49,6 +49,11 @@ import useToast from '../hooks/useToast';
 import ToastContainer from './ui/Toast';
 import SearchBar from './ui/SearchBar';
 import ProgressIndicator from './ui/ProgressIndicator';
+import { AuthProvider, useAuth } from './AuthContext';
+import AuthModal from './ui/AuthModal';
+import AboutModal from './ui/AboutModal';
+import FeaturesModal from './ui/FeaturesModal';
+import SampleMapsModal from './ui/SampleMapsModal';
 import { useProgress } from '../hooks/useLocalStorage';
 import useKeyboardShortcuts from '../hooks/useKeyboardShortcuts';
 
@@ -276,106 +281,53 @@ const nodeTypes = {
 // ============================================
 // LAYOUT ALGORITHM (from old)
 // ============================================
+// New layout: radial / network-style layout that groups by level and spreads nodes around a center.
+// This produces a more organic "knowledge graph" look and keeps a visual hierarchy by radius.
 const getLayoutedElements = (nodes: LearningNode[], edges: { from: string; to: string }[]) => {
-  const HORIZONTAL_SPACING = 350;
-  const VERTICAL_SPACING = 180;
-  const NODE_HEIGHT = 200;
+  const center = { x: 0, y: 0 };
+  const levelRadii: Record<string, number> = { beginner: 0, intermediate: 320, advanced: 640 };
 
-  const childrenMap = new Map<string, string[]>();
-  const parentMap = new Map<string, string>();
   const nodeMap = new Map<string, LearningNode>();
+  nodes.forEach((n) => nodeMap.set(n.id, n));
 
-  nodes.forEach((node) => nodeMap.set(node.id, node));
-  edges.forEach((edge) => {
-    if (!childrenMap.has(edge.from)) {
-      childrenMap.set(edge.from, []);
-    }
-    childrenMap.get(edge.from)!.push(edge.to);
-    parentMap.set(edge.to, edge.from);
+  // group nodes by level
+  const groups: Record<string, LearningNode[]> = { beginner: [], intermediate: [], advanced: [] };
+  nodes.forEach((n) => {
+    const level = n.level || 'beginner';
+    (groups[level] ||= []).push(n);
   });
 
-  const rootNode = nodes.find((n) => !parentMap.has(n.id)) || nodes[0];
-  if (!rootNode) return { nodes: [], edges: [] };
+  const flowNodes: Node[] = [];
 
-  const subtreeHeights = new Map<string, number>();
-  const calculateHeight = (nodeId: string): number => {
-    if (subtreeHeights.has(nodeId)) return subtreeHeights.get(nodeId)!;
+  // center root: pick a representative root (the first beginner or first node)
+  const root = nodes.find((n) => n.level === 'beginner') || nodes[0];
+  if (root) {
+    flowNodes.push({ id: root.id, type: 'custom', position: { x: center.x, y: center.y }, data: root, sourcePosition: Position.Right, targetPosition: Position.Left });
+  }
 
-    const children = childrenMap.get(nodeId) || [];
-    if (children.length === 0) {
-      subtreeHeights.set(nodeId, NODE_HEIGHT);
-      return NODE_HEIGHT;
-    }
-
-    const childrenHeight = children.reduce((sum, childId) => sum + calculateHeight(childId), 0);
-    const spacing = (children.length - 1) * VERTICAL_SPACING;
-    const totalHeight = childrenHeight + spacing;
-    subtreeHeights.set(nodeId, Math.max(NODE_HEIGHT, totalHeight));
-    return subtreeHeights.get(nodeId)!;
-  };
-
-  calculateHeight(rootNode.id);
-
-  const positions = new Map<string, { x: number; y: number }>();
-
-  const positionNode = (nodeId: string, level: number, startY: number): number => {
-    const node = nodeMap.get(nodeId);
-    if (!node) return startY;
-
-    const children = childrenMap.get(nodeId) || [];
-    const subtreeHeight = subtreeHeights.get(nodeId) || NODE_HEIGHT;
-
-    let currentY = startY;
-    if (children.length > 0) {
-      const childrenHeight = children.reduce((sum, childId) => subtreeHeights.get(childId) || NODE_HEIGHT, 0);
-      const spacing = (children.length - 1) * VERTICAL_SPACING;
-      const totalChildrenHeight = childrenHeight + spacing;
-      currentY = startY + (totalChildrenHeight - NODE_HEIGHT) / 2;
-    }
-
-    positions.set(nodeId, { x: level * HORIZONTAL_SPACING, y: currentY });
-
-    let childStartY = startY;
-    for (const childId of children) {
-      const child = nodeMap.get(childId);
-      const contentBasedSpacing = child ? Math.min(VERTICAL_SPACING * 1.5, VERTICAL_SPACING + (child.description?.length || 0) / 50 * VERTICAL_SPACING) : VERTICAL_SPACING;
-      childStartY = positionNode(childId, level + 1, childStartY);
-      childStartY += contentBasedSpacing;
-    }
-
-    return startY + subtreeHeight;
-  };
-
-  positionNode(rootNode.id, 0, 0);
-
-  const rootY = positions.get(rootNode.id)?.y || 0;
-  const totalHeight = subtreeHeights.get(rootNode.id) || NODE_HEIGHT;
-  const centerOffset = (totalHeight - NODE_HEIGHT) / 2;
-
-  positions.forEach((pos, nodeId) => {
-    if (nodeId === rootNode.id) {
-      pos.y = -centerOffset;
-    } else {
-      pos.y -= rootY;
-    }
+  // for each group (except root if included), place nodes on their ring
+  Object.entries(groups).forEach(([level, list]) => {
+    const radius = levelRadii[level] ?? 300;
+    const count = list.length;
+    if (count === 0) return;
+    const angleStep = (Math.PI * 2) / Math.max(1, count);
+    list.forEach((node, i) => {
+      if (node.id === root?.id) return; // already placed
+      const angle = i * angleStep + (Math.random() - 0.5) * 0.4; // slight jitter
+      const x = Math.round(center.x + Math.cos(angle) * radius + (Math.random() - 0.5) * 60);
+      const y = Math.round(center.y + Math.sin(angle) * radius + (Math.random() - 0.5) * 60);
+      flowNodes.push({ id: node.id, type: 'custom', position: { x, y }, data: node, sourcePosition: Position.Right, targetPosition: Position.Left });
+    });
   });
 
-  const flowNodes: Node[] = nodes.map((node) => ({
-    id: node.id,
-    type: 'custom',
-    position: positions.get(node.id) || { x: 0, y: 0 },
-    data: node,
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-  }));
-
+  // edges: style based on source category and node completion
   const getEdgeStyles = (sourceNode: LearningNode | undefined, targetNode: LearningNode | undefined) => {
     const sourceCategory = (sourceNode?.category?.toLowerCase() || 'default') as keyof typeof categoryColors;
     const sourceLevel = (sourceNode?.level || 'beginner') as keyof typeof levelOpacity;
     const targetCompleted = targetNode?.completed || false;
 
-    const colors = categoryColors[sourceCategory];
-    const opacity = levelOpacity[sourceLevel];
+    const colors = categoryColors[sourceCategory] || categoryColors.default;
+    const opacity = levelOpacity[sourceLevel] ?? 0.8;
 
     return {
       animated: !targetCompleted,
@@ -383,12 +335,12 @@ const getLayoutedElements = (nodes: LearningNode[], edges: { from: string; to: s
         strokeWidth: targetCompleted ? 2 : 3,
         opacity: targetCompleted ? 0.6 : opacity,
         stroke: `url('#${sourceCategory}-gradient')`,
-        filter: targetCompleted ? 'none' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+        filter: targetCompleted ? 'none' : 'drop-shadow(0 2px 6px rgba(0,0,0,0.12))',
       },
       markerEnd: {
         type: MarkerType.ArrowClosed,
-        width: targetCompleted ? 20 : 24,
-        height: targetCompleted ? 20 : 24,
+        width: targetCompleted ? 18 : 22,
+        height: targetCompleted ? 18 : 22,
         color: colors.end,
       },
     };
@@ -398,14 +350,7 @@ const getLayoutedElements = (nodes: LearningNode[], edges: { from: string; to: s
     const sourceNode = nodeMap.get(edge.from);
     const targetNode = nodeMap.get(edge.to);
     const styles = getEdgeStyles(sourceNode, targetNode);
-
-    return {
-      id: `edge-${idx}`,
-      source: edge.from,
-      target: edge.to,
-      type: 'smoothstep',
-      ...styles,
-    };
+    return { id: `edge-${idx}`, source: edge.from, target: edge.to, type: 'smoothstep', ...styles };
   });
 
   return { nodes: flowNodes, edges: flowEdges };
@@ -449,6 +394,12 @@ export default function AILearningMap() {
   const [mapId] = useState(() => `map-${Date.now()}`);
   const { progress, toggleNodeCompletion } = useProgress(mapId);
 
+  // modal & auth states
+  const [authOpen, setAuthOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [featuresOpen, setFeaturesOpen] = useState(false);
+  const [samplesOpen, setSamplesOpen] = useState(false);
+
   // UI niceties from new design
   const [isHovered, setIsHovered] = useState(false);
   const [activeFeature, setActiveFeature] = useState(0);
@@ -458,6 +409,36 @@ export default function AILearningMap() {
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
   const reactFlowInstance = useRef<any>(null);
+
+  // Authentication controls - nested so hook can be used after provider is mounted in JSX
+  const AuthControls = () => {
+    try {
+      const { user, signOut } = useAuth();
+      const [menuOpen, setMenuOpen] = useState(false);
+      return (
+        <div className="relative">
+          {user ? (
+            <div className="flex items-center gap-2">
+              <button onClick={() => setMenuOpen((s) => !s)} className="flex items-center gap-2 px-3 py-2 bg-white/90 rounded-full border">
+                <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center font-semibold text-sm">{user.avatar || user.name?.charAt(0)?.toUpperCase() || 'U'}</div>
+                <span className="text-sm">{user.name || user.email.split('@')[0]}</span>
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 mt-2 bg-white rounded-md shadow-lg border p-2">
+                  <button onClick={() => { signOut(); setMenuOpen(false); }} className="px-3 py-2 text-sm w-full text-left">Sign out</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button onClick={() => setAuthOpen(true)} className="px-4 py-2 bg-white/90 rounded-xl">Sign In</button>
+          )}
+        </div>
+      );
+    } catch (e) {
+      // hook used outside provider — render fallback sign in
+      return <button onClick={() => setAuthOpen(true)} className="px-4 py-2 bg-white/90 rounded-xl">Sign In</button>;
+    }
+  };
 
   // example topics + features + stats (from new)
   const exampleTopics = [
@@ -633,14 +614,31 @@ export default function AILearningMap() {
     toast.success('Map exported successfully');
   }, [mapData, progress, nodes, toast]);
 
+  // Load a sample template into the map using our layout algorithm
+  const handleLoadSample = useCallback((template: any) => {
+    if (!template) return;
+    try {
+      const { nodes: flowNodes, edges: flowEdges } = getLayoutedElements(template.nodes || [], template.edges || []);
+      setMapData(template);
+      setNodes(flowNodes);
+      setEdges(flowEdges);
+      setShowMap(true);
+      setTimeout(() => {
+        setNodeEntered(true);
+        if (reactFlowInstance.current) reactFlowInstance.current.fitView({ padding: 0.3, duration: 800 });
+      }, 120);
+    } catch (err) {
+      toast.error('Failed to load sample map');
+    }
+  }, [setNodes, setEdges, toast]);
+
   // ============================================
   // AUTOSAVE
   // ============================================
   useEffect(() => {
     try {
-      if (mapData) {
-        localStorage.setItem('cerebra:autosave', JSON.stringify({ mapData, savedAt: new Date().toISOString() }));
-      }
+      // Autosave is kept in-memory for this demo to respect the "no localStorage/sessionStorage" constraint.
+      // We could push to an API here if persistence across reloads is required.
     } catch (e) {
       // ignore
     }
@@ -720,8 +718,13 @@ export default function AILearningMap() {
   // ============================================
   if (showMap) {
     return (
+      <AuthProvider>
       <div className="h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 relative overflow-hidden">
         <ToastContainer />
+        <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+        <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
+        <FeaturesModal open={featuresOpen} onClose={() => setFeaturesOpen(false)} />
+        <SampleMapsModal open={samplesOpen} onClose={() => setSamplesOpen(false)} onSelect={(t) => { handleLoadSample(t); setSamplesOpen(false); }} />
         <div className="absolute inset-0 opacity-30">
           <div
             className="absolute inset-0"
@@ -777,6 +780,12 @@ export default function AILearningMap() {
                   );
                 })}
               </div>
+              <div className="ml-3 flex items-center gap-2">
+                <div className="text-sm text-gray-600">Visible: <span className="font-semibold text-gray-800">{filteredNodes.length}</span></div>
+                {activeFilter && (
+                  <button onClick={() => setActiveFilter(null)} className="px-3 py-1 text-xs bg-gray-100 rounded-md">Clear</button>
+                )}
+              </div>
 
               <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-gray-200/60 text-gray-700 rounded-xl hover:bg-gray-50/80 transition-all duration-300 shadow-sm hover:shadow-md">
                 <Download className="w-4 h-4" /> Export
@@ -805,6 +814,9 @@ export default function AILearningMap() {
               >
                 New Map
               </button>
+              <div className="ml-2">
+                <AuthControls />
+              </div>
             </div>
           </div>
         </div>
@@ -840,6 +852,7 @@ export default function AILearningMap() {
           </ReactFlow>
         </div>
       </div>
+      </AuthProvider>
     );
   }
 
@@ -889,6 +902,7 @@ export default function AILearningMap() {
         <div className="absolute -bottom-8 left-1/2 w-72 h-72 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000" />
       </div>
 
+      <AuthProvider>
       <div className="relative z-10 max-w-7xl mx-auto px-6 py-12">
         <nav className="flex items-center justify-between mb-20 animate-fade-in">
           <div className="flex items-center gap-3">
@@ -898,9 +912,12 @@ export default function AILearningMap() {
             <span className="text-2xl font-bold text-white">CEREBRA</span>
           </div>
           <div className="flex items-center gap-4">
-            <button className="px-4 py-2 text-gray-300 hover:text-white transition-colors">About</button>
-            <button className="px-4 py-2 text-gray-300 hover:text-white transition-colors">Features</button>
-            <button className="px-6 py-2 bg-white/10 backdrop-blur-sm border border-white/20 text-white rounded-xl hover:bg-white/20 transition-all">Sign In</button>
+            <button onClick={() => setAboutOpen(true)} className="px-4 py-2 text-gray-300 hover:text-white transition-colors">About</button>
+            <button onClick={() => setFeaturesOpen(true)} className="px-4 py-2 text-gray-300 hover:text-white transition-colors">Features</button>
+            <button onClick={() => setSamplesOpen(true)} className="px-4 py-2 text-gray-300 hover:text-white transition-colors">Try Sample Map</button>
+            <div>
+              <AuthControls />
+            </div>
           </div>
         </nav>
 
@@ -936,9 +953,9 @@ export default function AILearningMap() {
               <ArrowRight className={`w-5 h-5 transition-transform ${isHovered ? 'translate-x-1' : ''}`} />
             </button>
 
-            <button className="px-8 py-4 bg-white/10 backdrop-blur-sm border border-white/20 text-white rounded-2xl font-bold text-lg hover:bg-white/20 transition-all duration-300 flex items-center gap-2">
+            <button onClick={() => setSamplesOpen(true)} className="px-8 py-4 bg-white/10 backdrop-blur-sm border border-white/20 text-white rounded-2xl font-bold text-lg hover:bg-white/20 transition-all duration-300 flex items-center gap-2">
               <Play className="w-5 h-5" />
-              Watch Demo
+              Try Sample Map
             </button>
           </div>
 
@@ -962,7 +979,7 @@ export default function AILearningMap() {
             <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 rounded-3xl blur-2xl opacity-30 animate-pulse-glow" />
             <div className="relative bg-slate-900/90 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl">
               <div className="mb-6">
-                <label className="block text-white font-bold text-sm mb-3 uppercase tracking-wider flex items-center gap-2">
+                <label className="text-white font-bold text-sm mb-3 uppercase tracking-wider flex items-center gap-2">
                   <Search className="w-4 h-4 text-purple-400" />
                   What do you want to master?
                 </label>
@@ -992,7 +1009,7 @@ export default function AILearningMap() {
               </div>
 
               <div className="mb-6">
-                <label className="block text-white font-bold text-sm mb-3 uppercase tracking-wider flex items-center gap-2">
+                <label className="text-white font-bold text-sm mb-3 uppercase tracking-wider flex items-center gap-2">
                   <Target className="w-4 h-4 text-purple-400" />
                   Choose Your Level
                 </label>
@@ -1061,7 +1078,15 @@ export default function AILearningMap() {
         </div>
       </div>
 
-      {/* Custom animations (copied from new + old) */}
+  {/* Modals */}
+  <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+  <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
+  <FeaturesModal open={featuresOpen} onClose={() => setFeaturesOpen(false)} />
+  <SampleMapsModal open={samplesOpen} onClose={() => setSamplesOpen(false)} onSelect={(t) => { handleLoadSample(t); setSamplesOpen(false); }} />
+
+  </AuthProvider>
+
+  {/* Custom animations (copied from new + old) */}
       <style jsx>{`
         @keyframes gradient-x { 0%,100%{background-position:0% 50%}50%{background-position:100% 50%} }
         @keyframes blob { 0%,100%{transform:translate(0,0) scale(1)} 33%{transform:translate(30px,-50px) scale(1.1)} 66%{transform:translate(-20px,20px) scale(0.9)} }
