@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@types/dagre": "^0.7.53",
+    "dagre": "^0.8.5",
     "lucide-react": "^0.427.0",
     "next": "14.2.5",
     "node-fetch": "^3.3.2",
