@@ -43,16 +43,16 @@ export default function SampleMapsModal({ open, onClose, onSelect }: Props) {
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative z-10 w-full max-w-4xl bg-white rounded-2xl p-6 shadow-xl border">
-        <h3 className="text-xl font-bold mb-2">Try Sample Map</h3>
+        <h3 className="text-xl font-bold mb-2 text-gray-900">Try Sample Map</h3>
         <p className="text-sm text-gray-700 mb-4">Generate a live example learning map from the AI (no local templates are used).</p>
 
         <div className="grid md:grid-cols-3 gap-4">
           {EXAMPLE_TOPICS.map((t, idx) => (
             <div key={t.topic + idx} className="p-4 border rounded-lg flex flex-col justify-between">
               <div>
-                <h4 className="font-semibold mb-1">{t.topic}</h4>
-                <p className="text-sm text-gray-600 mb-2">Generate a curated learning map for this topic.</p>
-                <p className="text-xs text-gray-500">Live from AI • Difficulty: Beginner</p>
+                <h4 className="font-semibold mb-1 text-gray-900">{t.topic}</h4>
+                <p className="text-sm text-gray-700 mb-2">Generate a curated learning map for this topic.</p>
+                <p className="text-xs text-gray-600">Live from AI • Difficulty: Beginner</p>
               </div>
               <div className="mt-4 flex gap-2">
                 <button onClick={() => loadTopic(t.topic)} disabled={Boolean(loadingTopic)} className="px-3 py-2 bg-blue-600 text-white rounded-lg">

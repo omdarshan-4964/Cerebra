@@ -13,8 +13,10 @@ import ReactFlow, {
   MarkerType,
   Position,
   NodeProps,
+  Handle,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import dagre from 'dagre';
 import {
   Sparkles,
   Download,
@@ -59,6 +61,9 @@ interface CustomNodeData extends LearningNode {
   isHighlighted?: boolean;
 }
 
+// ============================================
+// TURBO FLOW INSPIRED CUSTOM NODE
+// ============================================
 const CustomNode = React.memo(({ data, selected }: NodeProps<CustomNodeData>) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -73,62 +78,26 @@ const CustomNode = React.memo(({ data, selected }: NodeProps<CustomNodeData>) =>
       server: Server,
     };
     const Icon = icons[category?.toLowerCase()] || Code;
-    return <Icon className="w-5 h-5" />;
+    return <Icon className="w-4 h-4" />;
   }, []);
 
-  const getCategoryColors = useCallback((category: string) => {
-    const colors: Record<string, { bg: string; icon: string; border: string }> = {
-      frontend: {
-        bg: 'bg-gradient-to-br from-purple-500/20 to-pink-500/20',
-        icon: 'text-purple-600',
-        border: 'border-purple-300/50',
-      },
-      backend: {
-        bg: 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20',
-        icon: 'text-blue-600',
-        border: 'border-blue-300/50',
-      },
-      database: {
-        bg: 'bg-gradient-to-br from-green-500/20 to-emerald-500/20',
-        icon: 'text-green-600',
-        border: 'border-green-300/50',
-      },
-      general: {
-        bg: 'bg-gradient-to-br from-indigo-500/20 to-purple-500/20',
-        icon: 'text-indigo-600',
-        border: 'border-indigo-300/50',
-      },
-      fundamentals: {
-        bg: 'bg-gradient-to-br from-orange-500/20 to-red-500/20',
-        icon: 'text-orange-600',
-        border: 'border-orange-300/50',
-      },
-      tools: {
-        bg: 'bg-gradient-to-br from-teal-500/20 to-cyan-500/20',
-        icon: 'text-teal-600',
-        border: 'border-teal-300/50',
-      },
+  const getCategoryGlowColors = useCallback((category: string) => {
+    const colors: Record<string, { from: string; to: string; icon: string }> = {
+      frontend: { from: 'from-purple-500', to: 'to-pink-500', icon: 'text-purple-400' },
+      backend: { from: 'from-blue-500', to: 'to-cyan-500', icon: 'text-blue-400' },
+      database: { from: 'from-green-500', to: 'to-emerald-500', icon: 'text-green-400' },
+      general: { from: 'from-indigo-500', to: 'to-purple-500', icon: 'text-indigo-400' },
+      fundamentals: { from: 'from-orange-500', to: 'to-red-500', icon: 'text-orange-400' },
+      tools: { from: 'from-teal-500', to: 'to-cyan-500', icon: 'text-teal-400' },
     };
     return colors[category?.toLowerCase()] || colors.general;
   }, []);
 
   const getLevelConfig = useCallback((level: string) => {
-    const configs: Record<string, { color: string; label: string; gradient: string }> = {
-      beginner: {
-        color: 'bg-green-500',
-        label: 'Beginner',
-        gradient: 'from-green-400 to-emerald-500',
-      },
-      intermediate: {
-        color: 'bg-yellow-500',
-        label: 'Intermediate',
-        gradient: 'from-yellow-400 to-orange-500',
-      },
-      advanced: {
-        color: 'bg-red-500',
-        label: 'Advanced',
-        gradient: 'from-red-400 to-pink-500',
-      },
+    const configs: Record<string, { label: string; color: string }> = {
+      beginner: { label: 'Beginner', color: 'from-emerald-500 to-teal-500' },
+      intermediate: { label: 'Intermediate', color: 'from-amber-500 to-orange-500' },
+      advanced: { label: 'Advanced', color: 'from-rose-500 to-pink-500' },
     };
     return configs[level] || configs.beginner;
   }, []);
@@ -140,98 +109,91 @@ const CustomNode = React.memo(({ data, selected }: NodeProps<CustomNodeData>) =>
       book: Book,
     };
     const Icon = icons[type] || FileText;
-    return <Icon className="w-3.5 h-3.5" />;
+    return <Icon className="w-3 h-3" />;
   }, []);
 
-  const categoryColors = getCategoryColors(data?.category || 'general');
+  const categoryGlow = getCategoryGlowColors(data?.category || 'general');
   const levelConfig = getLevelConfig(data?.level || 'beginner');
 
   return (
     <div
-      className={`relative min-w-[280px] transition-all duration-300 ${selected ? 'scale-105' : ''}`}
+      className="relative group"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div
-        className={`relative rounded-2xl p-6 backdrop-blur-xl bg-white/80 border-2 transition-all duration-300 ${
-          isHovered || selected
-            ? 'shadow-2xl border-blue-400/60 scale-105'
-            : data?.isHighlighted
-            ? 'shadow-lg border-yellow-400/60 ring-4 ring-yellow-200/30'
-            : 'shadow-md border-gray-200/60'
-        } ${categoryColors.border}`}
-        style={{
-          background: `linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)`,
-        }}
-      >
-        <div
-          className={`absolute inset-0 rounded-2xl opacity-10 transition-opacity duration-300 ${
-            isHovered ? 'opacity-20' : ''
-          } bg-gradient-to-br ${categoryColors.bg.replace('/20', '')}`}
-        />
+      {/* Glowing border effect (Turbo Flow inspired) */}
+      <div className={`absolute -inset-0.5 bg-gradient-to-r ${categoryGlow.from} ${categoryGlow.to} rounded-lg blur opacity-30 group-hover:opacity-60 transition-opacity duration-300 ${selected ? 'opacity-60' : ''}`} />
 
-        <div className="relative z-10">
-          <div className="flex items-start justify-between mb-3">
-            <div className={`p-2.5 rounded-xl ${categoryColors.bg} ${categoryColors.icon} shadow-sm`}>
-              {getIcon(data?.category)}
-            </div>
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-bold text-white shadow-sm bg-gradient-to-r ${levelConfig.gradient}`}
-            >
-              {levelConfig.label}
-            </span>
+      {/* Main node card with glassmorphism */}
+      <div className="relative bg-slate-900/80 backdrop-blur-md border border-white/10 rounded-lg p-4 w-64 shadow-xl transition-all duration-300">
+        {/* Header: icon + level badge */}
+        <div className="flex items-center justify-between mb-3">
+          <div className={`p-1.5 rounded-md bg-slate-800/80 ${categoryGlow.icon}`}>
+            {getIcon(data?.category)}
           </div>
-
-          <h3 className="font-bold text-base text-gray-900 mb-2 leading-tight">{data?.title}</h3>
-          <p className="text-sm text-gray-600 mb-4 leading-relaxed">{data?.description}</p>
-
-          <div className="flex items-center gap-2 mb-3">
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                checked={Boolean(data?.completed)}
-                onChange={(e) => {
-                  window.dispatchEvent(new CustomEvent('cerebra-toggle-complete', { detail: { id: data.id, completed: e.target.checked } }));
-                }}
-                className="w-4 h-4 rounded"
-              />
-              <span className="text-xs">Mark completed</span>
-            </label>
-          </div>
-
-          {data?.resources && data.resources.length > 0 && (
-            <div
-              className={`overflow-hidden transition-all duration-300 ${
-                isHovered ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
-              }`}
-            >
-              <div className="pt-3 border-t border-gray-200/60">
-                <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Resources</p>
-                <div className="space-y-2">
-                  {data.resources.map((resource: Resource, idx: number) => (
-                    <a
-                      key={idx}
-                      href={resource.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 p-2 rounded-lg bg-gray-50/80 hover:bg-blue-50/80 transition-all duration-200 group"
-                    >
-                      <div className="text-blue-600 group-hover:text-blue-700">{getResourceIcon(resource.type)}</div>
-                      <span className="text-xs text-gray-700 group-hover:text-blue-700 truncate flex-1">{resource.title}</span>
-                      <Play className="w-3 h-3 text-gray-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+          <span className={`px-2 py-1 rounded-full text-xs font-bold text-white bg-gradient-to-r ${levelConfig.color} shadow-lg`}>
+            {levelConfig.label}
+          </span>
         </div>
 
-        {isHovered && (
+        {/* Title */}
+        <h3 className="font-bold text-sm text-white mb-1 leading-tight line-clamp-2">{data?.title}</h3>
+
+        {/* Description */}
+        <p className="text-xs text-gray-300 mb-3 leading-relaxed line-clamp-3">{data?.description}</p>
+
+        {/* Completion checkbox */}
+        <div className="flex items-center gap-2 mb-3">
+          <label className="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-gray-200 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={Boolean(data?.completed)}
+              onChange={(e) => {
+                window.dispatchEvent(new CustomEvent('cerebra-toggle-complete', { detail: { id: data.id, completed: e.target.checked } }));
+              }}
+              className="w-3 h-3 rounded"
+            />
+            <span>Done</span>
+          </label>
+        </div>
+
+        {/* Resources section (shown on hover) */}
+        {data?.resources && data.resources.length > 0 && (
           <div
-            className={`absolute -inset-0.5 rounded-2xl bg-gradient-to-r ${levelConfig.gradient} opacity-20 blur-xl -z-10 transition-opacity duration-300`}
-          />
+            className={`overflow-hidden transition-all duration-300 ${
+              isHovered ? 'max-h-48 opacity-100' : 'max-h-0 opacity-0'
+            }`}
+          >
+            <div className="pt-2 border-t border-white/10">
+              <p className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">Resources</p>
+              <div className="space-y-1">
+                {data.resources.map((resource: Resource, idx: number) => (
+                  <a
+                    key={idx}
+                    href={resource.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 p-1.5 rounded text-xs text-gray-300 hover:text-white hover:bg-white/5 transition-all duration-150 group/res"
+                  >
+                    <div className="text-gray-500 group-hover/res:text-blue-400">{getResourceIcon(resource.type)}</div>
+                    <span className="truncate flex-1">{resource.title}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
+
+        {/* Highlight ring */}
+        {data?.isHighlighted && (
+          <div className="absolute inset-0 rounded-lg border-2 border-yellow-400/50 pointer-events-none" />
+        )}
+
+        {/* Handles on all sides for flexible connections */}
+        <Handle type="target" position={Position.Top} />
+        <Handle type="target" position={Position.Bottom} />
+        <Handle type="target" position={Position.Left} />
+        <Handle type="source" position={Position.Right} />
       </div>
     </div>
   );
@@ -274,121 +236,72 @@ const nodeTypes = {
 };
 
 // ============================================
-// LAYOUT ALGORITHM (from old)
+// LAYOUT ALGORITHM - DAGRE BASED (Turbo Flow style)
 // ============================================
 const getLayoutedElements = (nodes: LearningNode[], edges: { from: string; to: string }[]) => {
-  const HORIZONTAL_SPACING = 350;
-  const VERTICAL_SPACING = 180;
-  const NODE_HEIGHT = 200;
-
-  const childrenMap = new Map<string, string[]>();
-  const parentMap = new Map<string, string>();
   const nodeMap = new Map<string, LearningNode>();
+  nodes.forEach((n) => nodeMap.set(n.id, n));
 
-  nodes.forEach((node) => nodeMap.set(node.id, node));
+  // Create Dagre graph
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+  dagreGraph.setGraph({
+    rankdir: 'LR', // Left-to-right
+    nodesep: 150,
+    ranksep: 200,
+    edgesep: 50,
+    marginx: 50,
+    marginy: 50,
+  });
+
+  // Add nodes to Dagre graph
+  nodes.forEach((node) => {
+    dagreGraph.setNode(node.id, { width: 256, height: 160 });
+  });
+
+  // Add edges to Dagre graph
   edges.forEach((edge) => {
-    if (!childrenMap.has(edge.from)) {
-      childrenMap.set(edge.from, []);
-    }
-    childrenMap.get(edge.from)!.push(edge.to);
-    parentMap.set(edge.to, edge.from);
+    dagreGraph.setEdge(edge.from, edge.to);
   });
 
-  const rootNode = nodes.find((n) => !parentMap.has(n.id)) || nodes[0];
-  if (!rootNode) return { nodes: [], edges: [] };
+  // Compute layout
+  dagre.layout(dagreGraph);
 
-  const subtreeHeights = new Map<string, number>();
-  const calculateHeight = (nodeId: string): number => {
-    if (subtreeHeights.has(nodeId)) return subtreeHeights.get(nodeId)!;
-
-    const children = childrenMap.get(nodeId) || [];
-    if (children.length === 0) {
-      subtreeHeights.set(nodeId, NODE_HEIGHT);
-      return NODE_HEIGHT;
-    }
-
-    const childrenHeight = children.reduce((sum, childId) => sum + calculateHeight(childId), 0);
-    const spacing = (children.length - 1) * VERTICAL_SPACING;
-    const totalHeight = childrenHeight + spacing;
-    subtreeHeights.set(nodeId, Math.max(NODE_HEIGHT, totalHeight));
-    return subtreeHeights.get(nodeId)!;
-  };
-
-  calculateHeight(rootNode.id);
-
-  const positions = new Map<string, { x: number; y: number }>();
-
-  const positionNode = (nodeId: string, level: number, startY: number): number => {
-    const node = nodeMap.get(nodeId);
-    if (!node) return startY;
-
-    const children = childrenMap.get(nodeId) || [];
-    const subtreeHeight = subtreeHeights.get(nodeId) || NODE_HEIGHT;
-
-    let currentY = startY;
-    if (children.length > 0) {
-      const childrenHeight = children.reduce((sum, childId) => subtreeHeights.get(childId) || NODE_HEIGHT, 0);
-      const spacing = (children.length - 1) * VERTICAL_SPACING;
-      const totalChildrenHeight = childrenHeight + spacing;
-      currentY = startY + (totalChildrenHeight - NODE_HEIGHT) / 2;
-    }
-
-    positions.set(nodeId, { x: level * HORIZONTAL_SPACING, y: currentY });
-
-    let childStartY = startY;
-    for (const childId of children) {
-      const child = nodeMap.get(childId);
-      const contentBasedSpacing = child ? Math.min(VERTICAL_SPACING * 1.5, VERTICAL_SPACING + (child.description?.length || 0) / 50 * VERTICAL_SPACING) : VERTICAL_SPACING;
-      childStartY = positionNode(childId, level + 1, childStartY);
-      childStartY += contentBasedSpacing;
-    }
-
-    return startY + subtreeHeight;
-  };
-
-  positionNode(rootNode.id, 0, 0);
-
-  const rootY = positions.get(rootNode.id)?.y || 0;
-  const totalHeight = subtreeHeights.get(rootNode.id) || NODE_HEIGHT;
-  const centerOffset = (totalHeight - NODE_HEIGHT) / 2;
-
-  positions.forEach((pos, nodeId) => {
-    if (nodeId === rootNode.id) {
-      pos.y = -centerOffset;
-    } else {
-      pos.y -= rootY;
-    }
+  // Extract positions from Dagre and create ReactFlow nodes
+  const flowNodes: Node[] = nodes.map((node) => {
+    const nodeWithPos = dagreGraph.node(node.id);
+    return {
+      id: node.id,
+      type: 'custom',
+      position: { x: nodeWithPos.x - 128, y: nodeWithPos.y - 80 }, // center the node
+      data: node,
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+    };
   });
 
-  const flowNodes: Node[] = nodes.map((node) => ({
-    id: node.id,
-    type: 'custom',
-    position: positions.get(node.id) || { x: 0, y: 0 },
-    data: node,
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-  }));
-
+  // Create edge styles with glow and gradients
   const getEdgeStyles = (sourceNode: LearningNode | undefined, targetNode: LearningNode | undefined) => {
     const sourceCategory = (sourceNode?.category?.toLowerCase() || 'default') as keyof typeof categoryColors;
     const sourceLevel = (sourceNode?.level || 'beginner') as keyof typeof levelOpacity;
     const targetCompleted = targetNode?.completed || false;
 
-    const colors = categoryColors[sourceCategory];
-    const opacity = levelOpacity[sourceLevel];
+    const colors = categoryColors[sourceCategory] || categoryColors.default;
+    const opacity = levelOpacity[sourceLevel] ?? 0.8;
 
     return {
       animated: !targetCompleted,
+      type: 'smoothstep' as const,
       style: {
-        strokeWidth: targetCompleted ? 2 : 3,
-        opacity: targetCompleted ? 0.6 : opacity,
+        strokeWidth: targetCompleted ? 1.5 : 2.5,
+        opacity: targetCompleted ? 0.5 : opacity,
         stroke: `url('#${sourceCategory}-gradient')`,
-        filter: targetCompleted ? 'none' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+        filter: targetCompleted ? 'none' : 'drop-shadow(0 0 8px rgba(168, 85, 247, 0.4))',
       },
       markerEnd: {
         type: MarkerType.ArrowClosed,
-        width: targetCompleted ? 20 : 24,
-        height: targetCompleted ? 20 : 24,
+        width: targetCompleted ? 18 : 24,
+        height: targetCompleted ? 18 : 24,
         color: colors.end,
       },
     };
@@ -403,7 +316,6 @@ const getLayoutedElements = (nodes: LearningNode[], edges: { from: string; to: s
       id: `edge-${idx}`,
       source: edge.from,
       target: edge.to,
-      type: 'smoothstep',
       ...styles,
     };
   });
@@ -720,43 +632,43 @@ export default function AILearningMap() {
   // ============================================
   if (showMap) {
     return (
-      <div className="h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 relative overflow-hidden">
+      <div className="h-screen w-full bg-slate-950 relative overflow-hidden">
         <ToastContainer />
-        <div className="absolute inset-0 opacity-30">
+        <div className="absolute inset-0 opacity-10">
           <div
             className="absolute inset-0"
             style={{
-              backgroundImage: `radial-gradient(circle at 2px 2px, rgb(99 102 241 / 0.15) 1px, transparent 0)`,
-              backgroundSize: '40px 40px',
+              backgroundImage: `radial-gradient(circle at 2px 2px, rgb(100 116 139 / 0.4) 1px, transparent 0)`,
+              backgroundSize: '50px 50px',
             }}
           />
         </div>
 
         {/* Header */}
-        <div className="absolute top-0 left-0 right-0 z-20 bg-white/90 backdrop-blur-xl border-b border-gray-200/60 shadow-sm">
+        <div className="absolute top-0 left-0 right-0 z-20 bg-slate-900/80 backdrop-blur-xl border-b border-slate-700/50 shadow-lg">
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
                   <Brain className="w-5 h-5 text-white" />
                 </div>
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                <h2 className="text-2xl font-bold text-white">
                   {mapData?.topic}
                 </h2>
               </div>
               {mapData?.templateName && (
-                <div className="mt-1 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
+                <div className="mt-1 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/30 text-purple-200 border border-purple-400/30">
                   Curated Template: {mapData.templateName}
                 </div>
               )}
-              <p className="text-sm text-gray-600 mt-1">Explore your personalized roadmap</p>
+              <p className="text-sm text-gray-400 mt-1">Explore your personalized roadmap</p>
               <ProgressIndicator completed={progress.completedNodes.length} total={nodes.length} className="mt-2" />
             </div>
 
             <div className="flex items-center gap-3">
               <SearchBar value={searchTerm} onChange={setSearchTerm} matchCount={searchTerm ? searchMatchCount : undefined} className="w-64" />
 
-              <div className="flex gap-2 bg-white/80 backdrop-blur-sm rounded-xl p-1.5 shadow-md border border-gray-200/60">
+              <div className="flex gap-2 bg-slate-800/60 backdrop-blur-sm rounded-xl p-1.5 shadow-md border border-slate-700/30">
                 {(['beginner', 'intermediate', 'advanced'] as const).map((level) => {
                   const isActive = activeFilter === level;
                   const colors: Record<string, string> = {
@@ -769,7 +681,7 @@ export default function AILearningMap() {
                       key={level}
                       onClick={() => setActiveFilter(isActive ? null : level)}
                       className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
-                        isActive ? `${colors[level]} text-white shadow-md scale-105` : 'text-gray-600 hover:bg-gray-100/80'
+                        isActive ? `${colors[level]} text-white shadow-md scale-105` : 'text-gray-300 hover:text-white hover:bg-slate-700/50'
                       }`}
                     >
                       {level.charAt(0).toUpperCase() + level.slice(1)}
@@ -778,7 +690,7 @@ export default function AILearningMap() {
                 })}
               </div>
 
-              <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-gray-200/60 text-gray-700 rounded-xl hover:bg-gray-50/80 transition-all duration-300 shadow-sm hover:shadow-md">
+              <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-slate-800/60 backdrop-blur-sm border border-slate-700/30 text-gray-300 rounded-xl hover:text-white hover:bg-slate-700/60 transition-all duration-300 shadow-sm hover:shadow-md">
                 <Download className="w-4 h-4" /> Export
               </button>
 
@@ -789,7 +701,7 @@ export default function AILearningMap() {
                   setSavedMaps(getMapHistory());
                   toast.success('Map saved to history');
                 }}
-                className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-gray-200/60 text-gray-700 rounded-xl hover:bg-gray-50/80 transition-all duration-300 shadow-sm hover:shadow-md"
+                className="flex items-center gap-2 px-4 py-2 bg-slate-800/60 backdrop-blur-sm border border-slate-700/30 text-gray-300 rounded-xl hover:text-white hover:bg-slate-700/60 transition-all duration-300 shadow-sm hover:shadow-md"
               >
                 Save
               </button>
@@ -834,9 +746,9 @@ export default function AILearningMap() {
           >
             <EdgeGradients />
 
-            <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color="#cbd5e1" className="opacity-40" />
-            <Controls className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200/60 p-1" showZoom showFitView showInteractive={false} />
-            <MiniMap nodeColor={(node) => categoryColors[node.data?.category?.toLowerCase() || 'default']?.start || '#3b82f6'} maskColor="rgba(0,0,0,0.1)" className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200/60" pannable zoomable />
+            <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color="#64748b" className="opacity-20" />
+            <Controls className="bg-slate-800/60 backdrop-blur-sm rounded-xl shadow-lg border border-slate-700/30 p-1" showZoom showFitView showInteractive={false} />
+            <MiniMap nodeColor={(node) => categoryColors[node.data?.category?.toLowerCase() || 'default']?.start || '#3b82f6'} maskColor="rgba(0,0,0,0.3)" className="bg-slate-800/60 backdrop-blur-sm rounded-xl shadow-lg border border-slate-700/30" pannable zoomable />
           </ReactFlow>
         </div>
       </div>

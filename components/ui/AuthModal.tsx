@@ -36,8 +36,8 @@ export default function AuthModal({ open, onClose }: Props) {
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative z-10 w-full max-w-md bg-white rounded-2xl p-6 shadow-xl border">
-        <h3 className="text-lg font-bold mb-2">{isSignUp ? 'Create an account' : 'Sign in'}</h3>
-        <p className="text-sm text-gray-600 mb-4">{isSignUp ? 'Start saving maps and managing your progress.' : 'Access saved maps and personalized features.'}</p>
+        <h3 className="text-lg font-bold mb-2 text-gray-900">{isSignUp ? 'Create an account' : 'Sign in'}</h3>
+        <p className="text-sm text-gray-700 mb-4">{isSignUp ? 'Start saving maps and managing your progress.' : 'Access saved maps and personalized features.'}</p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           {isSignUp && (

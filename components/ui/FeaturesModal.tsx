@@ -15,7 +15,7 @@ export default function FeaturesModal({ open, onClose }: Props) {
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative z-10 w-full max-w-3xl bg-white rounded-2xl p-6 shadow-xl border">
-        <h3 className="text-xl font-bold mb-2">Features</h3>
+        <h3 className="text-xl font-bold mb-2 text-gray-900">Features</h3>
         <p className="text-sm text-gray-700 mb-4">Explore main features with examples and short demos.</p>
 
         <div className="grid md:grid-cols-3 gap-4">
@@ -24,8 +24,8 @@ export default function FeaturesModal({ open, onClose }: Props) {
               <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center mb-3">
                 <f.Icon className="w-5 h-5 text-gray-700" />
               </div>
-              <h4 className="font-semibold">{f.title}</h4>
-              <p className="text-sm text-gray-600">{f.desc}</p>
+              <h4 className="font-semibold text-gray-900">{f.title}</h4>
+              <p className="text-sm text-gray-700">{f.desc}</p>
             </div>
           ))}
         </div>
